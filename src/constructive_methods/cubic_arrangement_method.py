@@ -9,7 +9,7 @@ __date__        = "June 21, 2024"
 __license__     = "BSD 2-Clause License"
 #/////////////////////////////////////////////////
 
-from constructive_methods.constructive_method import ConstructiveMethod
+from .constructive_method import ConstructiveMethod
 
 class CubicArrangementMethod(ConstructiveMethod):
 

@@ -106,7 +106,7 @@ class CreateParticlesInsideOfADomain():
             shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
         if self.parameters_all["generator_name"].GetString() == "isotropic_compression_method":
-            seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities', 'isotropic_compression_method_run.py')
+            seed_file_path_and_name = os.path.join(self.ini_path, 'utilities', 'isotropic_compression_method_run.py')
             aim_file_path_and_name = os.path.join(aim_path, 'isotropic_compression_method_run.py')
             with open(seed_file_path_and_name, "r") as f_material:
                     with open(aim_file_path_and_name, "w") as f_material_w:
@@ -117,19 +117,19 @@ class CreateParticlesInsideOfADomain():
 
             seed_file_name_list = ['inletPGDEM_FEM_boundary.mdpa']
             for seed_file_name in seed_file_name_list:
-                seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities','rem_seed_files', seed_file_name)
+                seed_file_path_and_name = os.path.join(self.ini_path, 'utilities','rem_seed_files', seed_file_name)
                 aim_file_path_and_name = os.path.join(aim_path, seed_file_name)
                 shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
         elif self.parameters_all["generator_name"].GetString() == "radius_expansion_method":
-            seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities', 'radius_expansion_method_run_v1.4.py')
+            seed_file_path_and_name = os.path.join(self.ini_path, 'utilities', 'radius_expansion_method_run_v1.4.py')
             aim_file_path_and_name = os.path.join(aim_path, 'radius_expansion_method_run_v1.4.py')
             shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
         elif self.parameters_all["generator_name"].GetString() == "radius_expansion_with_servo_control_method":
             seed_file_name_list = ['radius_expansion_with_servo_control_method_run.py', 'radius_expansion_with_servo_control_method_run_final.py', 'plot_stress.py']
             for seed_file_name in seed_file_name_list:
-                seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities', seed_file_name)
+                seed_file_path_and_name = os.path.join(self.ini_path, 'utilities', seed_file_name)
                 aim_file_path_and_name = os.path.join(aim_path, seed_file_name)
                 with open(seed_file_path_and_name, "r") as f_material:
                     with open(aim_file_path_and_name, "w") as f_material_w:
@@ -143,7 +143,7 @@ class CreateParticlesInsideOfADomain():
         elif self.parameters_all["generator_name"].GetString() == "improved_radius_expansion_with_servo_control_method":
             seed_file_name_list = ['improved_radius_expansion_with_servo_control_method_run.py', 'improved_radius_expansion_with_servo_control_method_run_final.py', 'plot_stress.py']
             for seed_file_name in seed_file_name_list:
-                seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities', seed_file_name)
+                seed_file_path_and_name = os.path.join(self.ini_path, 'utilities', seed_file_name)
                 aim_file_path_and_name = os.path.join(aim_path, seed_file_name)
                 with open(seed_file_path_and_name, "r") as f_material:
                     with open(aim_file_path_and_name, "w") as f_material_w:
@@ -162,7 +162,7 @@ class CreateParticlesInsideOfADomain():
                                 line = line.replace("1000", str(self.minimum_mean_stress))
                             f_material_w.write(line)
 
-        seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities', 'show_packing.py')
+        seed_file_path_and_name = os.path.join(self.ini_path, 'utilities', 'show_packing.py')
         aim_file_path_and_name = os.path.join(aim_path, 'show_packing.py')
         shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 

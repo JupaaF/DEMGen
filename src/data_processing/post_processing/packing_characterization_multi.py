@@ -12,7 +12,7 @@ __license__     = "BSD 2-Clause License"
 import os
 import subprocess
 import shutil
-from data_processing.post_processing.packing_characterization import PackingCharacterization
+from .packing_characterization import PackingCharacterization
 
 class PackingCharacterizationMulti(PackingCharacterization):
 
@@ -72,12 +72,12 @@ class PackingCharacterizationMulti(PackingCharacterization):
 
         seed_file_name_list = ['MaterialsDEM.json', 'inletPGDEM_FEM_boundary.mdpa']
         for seed_file_name in seed_file_name_list:
-            seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities','rem_seed_files', seed_file_name)
+            seed_file_path_and_name = os.path.join(self.ini_path, 'utilities','rem_seed_files', seed_file_name)
             aim_file_path_and_name = os.path.join(aim_path, seed_file_name)
             if os.path.exists(seed_file_path_and_name):
                 shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
-        seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'data_processing', 'post_processing', 'packing_characterization_run.py')
+        seed_file_path_and_name = os.path.join(self.ini_path, 'data_processing', 'post_processing', 'packing_characterization_run.py')
         aim_file_path_and_name = os.path.join(aim_path, 'packing_characterization_run.py')
         shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
