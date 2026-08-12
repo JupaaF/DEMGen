@@ -34,38 +34,26 @@ class CreateParticlesInsideOfADomain():
         self.WriteOutGIDData(request.output_file_name)
 
     def Initialize(self, request: ParticleCaseRequest):
-        
         self.particle_list = []
-        self.particle_list_left = []
-        self.particle_list_right = []
-        self.particle_list_top = []
-        self.particle_list_bottom = []
-        self.particle_list_front = []
-        self.particle_list_behind = []
         self.particle_list_side = []
 
+        parameters = self.context.parameters
         self.rve_size = [
-            self.context.parameters["domain_length_x"],
-            self.context.parameters["domain_length_y"],
-            self.context.parameters["domain_length_z"],
+            parameters["domain_length_x"],
+            parameters["domain_length_y"],
+            parameters["domain_length_z"],
         ]
-        domain_scale_multiplier = self.context.parameters[
+        domain_scale_multiplier = parameters[
             "random_particle_generation_parameters"
         ]["domain_scale_multiplier"]
-        RVE_length_x = self.rve_size[0]
-        RVE_length_y = self.rve_size[1]
-        RVE_length_z = self.rve_size[2]
+        half_sizes = [
+            0.5 * domain_scale_multiplier * length
+            for length in self.rve_size
+        ]
+        self.x_min, self.y_min, self.z_min = [-size for size in half_sizes]
+        self.x_max, self.y_max, self.z_max = half_sizes
 
-        #two times the RVE size
-
-        self.x_min = -0.5 * domain_scale_multiplier * RVE_length_x
-        self.x_max = 0.5 * domain_scale_multiplier * RVE_length_x
-        self.y_min = -0.5 * domain_scale_multiplier * RVE_length_y
-        self.y_max = 0.5 * domain_scale_multiplier * RVE_length_y
-        self.z_min = -0.5 * domain_scale_multiplier * RVE_length_z
-        self.z_max = 0.5 * domain_scale_multiplier * RVE_length_z
-
-        self.parameters_all = Parameters(json.dumps(self.context.parameters))
+        self.parameters_all = Parameters(json.dumps(parameters))
         self.parameters = self.parameters_all["random_particle_generation_parameters"]
         self.initial_target_packing_density = self.parameters["target_packing_density"].GetDouble()
         self.tolerance_of_packing_density = self.parameters["tolerance_of_packing_density"].GetDouble()
@@ -76,21 +64,17 @@ class CreateParticlesInsideOfADomain():
             self.parameters["target_packing_density"].SetDouble(request.packing_density)
         print("try_packing_density = {}".format(request.packing_density))
         print("target_packing_density = {}".format(self.parameters["target_packing_density"].GetDouble()))
-        original_psd = self.parameters["random_variable_settings"]["possible_values"].GetVector()
-        #scaled_pad = [x * self.parameters["random_variable_settings"]["radius_scale_multiplier"].GetDouble() for x in original_psd]
-        self.radius_scale_multiplier = self.parameters["random_variable_settings"]["radius_scale_multiplier"].GetDouble()
-        scaled_psd = []
-        for i in range(len(original_psd)):
-            scaled_psd.append(original_psd[i] * self.radius_scale_multiplier)
-        self.parameters["random_variable_settings"]["possible_values"].SetVector(scaled_psd)
+        random_settings = self.parameters["random_variable_settings"]
+        radius_scale_multiplier = random_settings["radius_scale_multiplier"].GetDouble()
+        original_psd = random_settings["possible_values"].GetVector()
+        scaled_psd = [radius * radius_scale_multiplier for radius in original_psd]
+        random_settings["possible_values"].SetVector(scaled_psd)
 
         self.case_number = request.case_number
         self.case_path = self.generated_cases_path / f"case_{request.case_number}"
 
-        print("Before creating folder")
         self.create_new_cases_folder()
         self.copy_seed_files_to_aim_folders()
-        print("After creating folder")
 
     def clear_old_cases_folder(self):
 
