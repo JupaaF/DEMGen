@@ -23,7 +23,6 @@ class DynamicMethod():
         self.parameters = parameters
         self.ini_path = ini_path
         self.run_path = run_path
-        os.chdir(self.run_path)
 
     def CreateInitialCases(self):
 

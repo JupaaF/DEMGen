@@ -10,6 +10,9 @@ __license__     = "BSD 2-Clause License"
 #/////////////////////////////////////////////////
 
 import os
+from pathlib import Path
+import subprocess
+import sys
 
 from dynamic_methods.dynamic_method import DynamicMethod
 from data_processing.pre_processing import create_particles_inside_of_a_domain
@@ -17,10 +20,11 @@ from data_processing.pre_processing import create_particles_inside_of_a_domain
 class RadiusExpansionWithServoControlMethod(DynamicMethod):
 
     def __init__(self) -> None:
+        super.__init__()
 
-        self.CreateIniCases = create_particles_inside_of_a_domain.CreateParticlesInsideOfADomain()
 
     def CreateInitialCases(self):
+        self.CreateIniCases = create_particles_inside_of_a_domain.CreateParticlesInsideOfADomain()
  
         RVE_size = [self.parameters["domain_length_x"], self.parameters["domain_length_y"], self.parameters["domain_length_z"]]
         domain_scale_multiplier = self.parameters["random_particle_generation_parameters"]["domain_scale_multiplier"]
@@ -33,31 +37,23 @@ class RadiusExpansionWithServoControlMethod(DynamicMethod):
 
     def RunDEM(self):
 
-        current_path = os.getcwd()
-        aim_folder_name = "case_" + str(self.packing_cnt)
-        aim_path = os.path.join(current_path, "generated_cases", aim_folder_name)
-        os.chdir(aim_path)
         if self.last_try:
-            if os.name == 'nt': # for windows
-                os.system("python radius_expansion_with_servo_control_method_run_final.py")
-            else: # for linux
-                os.system("python3 radius_expansion_with_servo_control_method_run_final.py")
+            script_name = "radius_expansion_with_servo_control_method_run_final.py"
         else:
-            if os.name == 'nt': # for windows
-                os.system("python radius_expansion_with_servo_control_method_run.py")
-            else: # for linux
-                os.system("python3 radius_expansion_with_servo_control_method_run.py")
+            script_name = "radius_expansion_with_servo_control_method_run.py"
 
-        if os.path.isfile("success.txt"):
-            os.chdir(current_path)
-            return True
-        else:
-            os.chdir(current_path)
-            return False
+        return self._run_case_script(script_name)
+
+    def _run_case_script(self, script_name):
+
+        case_path = Path(self.run_path) / "generated_cases" / f"case_{self.packing_cnt}"
+        subprocess.run([sys.executable, script_name], cwd=case_path, check=True)
+        return (case_path / "success.txt").is_file()
 
     def Run(self, parameters, ini_path, run_path):
 
         self.Initialization(parameters, ini_path, run_path)
+        os.chdir(self.run_path)
         packing_num = self.parameters["packing_num"]
         target_packing_density = self.parameters["random_particle_generation_parameters"]["target_packing_density"]
         packing_density_delta_list = self.parameters["random_particle_generation_parameters"]["packing_density_delta_list"]

@@ -9,9 +9,6 @@ __date__        = "June 05, 2025"
 __license__     = "BSD 2-Clause License"
 #/////////////////////////////////////////////////
 
-import os
-import subprocess
-
 from dynamic_methods.radius_expansion_with_servo_control_method import RadiusExpansionWithServoControlMethod
 
 class ImprovedRadiusExpansionWithServoControlMethod(RadiusExpansionWithServoControlMethod):
@@ -21,24 +18,9 @@ class ImprovedRadiusExpansionWithServoControlMethod(RadiusExpansionWithServoCont
 
     def RunDEM(self):
 
-        current_path = os.getcwd()
-        aim_folder_name = "case_" + str(self.packing_cnt)
-        aim_path = os.path.join(current_path, "generated_cases", aim_folder_name)
-        os.chdir(aim_path)
         if self.last_try:
-            if os.name == 'nt': # for windows
-                subprocess.run(['python', 'improved_radius_expansion_with_servo_control_method_run_final.py'], check=True)
-            else: # for linux
-                subprocess.run(['python3', 'improved_radius_expansion_with_servo_control_method_run_final.py'], check=True)
+            script_name = "improved_radius_expansion_with_servo_control_method_run_final.py"
         else:
-            if os.name == 'nt': # for windows
-                subprocess.run(['python', 'improved_radius_expansion_with_servo_control_method_run.py'], check=True)
-            else: # for linux
-                subprocess.run(['python3', 'improved_radius_expansion_with_servo_control_method_run.py'], check=True)
+            script_name = "improved_radius_expansion_with_servo_control_method_run.py"
 
-        if os.path.isfile("success.txt"):
-            os.chdir(current_path)
-            return True
-        else:
-            os.chdir(current_path)
-            return False
+        return self._run_case_script(script_name)
