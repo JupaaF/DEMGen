@@ -9,6 +9,7 @@ __date__        = "June 26, 2024"
 __license__     = "BSD 2-Clause License"
 #/////////////////////////////////////////////////
 
+from dataclasses import dataclass
 import os
 from pathlib import Path
 import subprocess
@@ -17,36 +18,46 @@ import sys
 from dynamic_methods.dynamic_method import DynamicMethod
 from data_processing.pre_processing import create_particles_inside_of_a_domain
 
+
+@dataclass(frozen=True)
+class Attempt:
+    case_number: int
+    packing_density: float
+    is_final_attempt: bool
+
+
 class RadiusExpansionWithServoControlMethod(DynamicMethod):
 
     def __init__(self) -> None:
-        super.__init__()
+        super().__init__()
 
-
-    def CreateInitialCases(self):
-        self.CreateIniCases = create_particles_inside_of_a_domain.CreateParticlesInsideOfADomain()
- 
+    def CreateInitialCases(self, attempt, initial_case_creator):
         RVE_size = [self.parameters["domain_length_x"], self.parameters["domain_length_y"], self.parameters["domain_length_z"]]
         domain_scale_multiplier = self.parameters["random_particle_generation_parameters"]["domain_scale_multiplier"]
         aim_file_name = 'inletPGDEM_ini.mdpa'
 
-        self.CreateIniCases.Initialize(RVE_size, domain_scale_multiplier, self.packing_cnt, self.ini_path, self.try_packing_density)
-        self.CreateIniCases.CreateParticles(RVE_size)
-        aim_folder_name = "case_" + str(self.packing_cnt)
-        self.CreateIniCases.WriteOutGIDData(aim_folder_name, aim_file_name)
+        initial_case_creator.Initialize(
+            RVE_size,
+            domain_scale_multiplier,
+            attempt.case_number,
+            self.ini_path,
+            attempt.packing_density,
+        )
+        initial_case_creator.CreateParticles(RVE_size)
+        initial_case_creator.WriteOutGIDData(f"case_{attempt.case_number}", aim_file_name)
 
-    def RunDEM(self):
+    def RunDEM(self, attempt):
 
-        if self.last_try:
+        if attempt.is_final_attempt:
             script_name = "radius_expansion_with_servo_control_method_run_final.py"
         else:
             script_name = "radius_expansion_with_servo_control_method_run.py"
 
-        return self._run_case_script(script_name)
+        return self._run_case_script(script_name, attempt)
 
-    def _run_case_script(self, script_name):
+    def _run_case_script(self, script_name, attempt):
 
-        case_path = Path(self.run_path) / "generated_cases" / f"case_{self.packing_cnt}"
+        case_path = Path(self.run_path) / "generated_cases" / f"case_{attempt.case_number}"
         subprocess.run([sys.executable, script_name], cwd=case_path, check=True)
         return (case_path / "success.txt").is_file()
 
@@ -54,31 +65,43 @@ class RadiusExpansionWithServoControlMethod(DynamicMethod):
 
         self.Initialization(parameters, ini_path, run_path)
         os.chdir(self.run_path)
+        generation = self.parameters["random_particle_generation_parameters"]
         packing_num = self.parameters["packing_num"]
-        target_packing_density = self.parameters["random_particle_generation_parameters"]["target_packing_density"]
-        packing_density_delta_list = self.parameters["random_particle_generation_parameters"]["packing_density_delta_list"]
-        try_packing_density_list = [target_packing_density - delta for delta in packing_density_delta_list]
-        self.packing_cnt = 1
+        attempt_densities = [
+            generation["target_packing_density"] - delta
+            for delta in generation["packing_density_delta_list"]
+        ]
 
-        if "DO_USE_SEED" not in self.parameters["random_particle_generation_parameters"].keys():
-            self.parameters["random_particle_generation_parameters"]["DO_USE_SEED"] = False
-        we_are_using_seed = self.parameters["random_particle_generation_parameters"]["DO_USE_SEED"] or self.parameters["random_particle_generation_parameters"]["random_variable_settings"]["do_use_seed"] == "true"
-        if we_are_using_seed and packing_num > 1:
-            os.error("Error: You are using a seed for particle generation, but you have specified packing_num > 1. This may lead to the same particle configuration being generated for each packing. Consider setting DO_USE_SEED to false or setting packing_num = 1.")
+        if not attempt_densities:
+            raise ValueError("packing_density_delta_list must contain at least one value.")
 
-        if os.path.isfile("generation_marker.txt"):
-            os.remove("generation_marker.txt")
-        while self.packing_cnt <= packing_num:
-            self.last_try = False
-            for try_packing_density in try_packing_density_list:
-                self.try_packing_density = try_packing_density
-                if try_packing_density == try_packing_density_list[-1]:
-                    self.last_try = True
-                with open("generation_marker.txt", "a") as marker_file:
-                    marker_file.write("Generation " + str(self.packing_cnt) + " - " + str(try_packing_density) + "\n")
-                    marker_file.close()
-                self.CreateInitialCases()
-                success_marker = self.RunDEM()
-                if success_marker:
+        uses_seed = any(
+            str(value).lower() == "true"
+            for value in (
+                generation.get("DO_USE_SEED", False),
+                generation["random_variable_settings"].get("do_use_seed", False),
+            )
+        )
+        if uses_seed and packing_num > 1:
+            raise ValueError(
+                "A seed cannot be used when packing_num is greater than one."
+            )
+
+        initial_case_creator = create_particles_inside_of_a_domain.CreateParticlesInsideOfADomain()
+        marker_path = Path(self.run_path) / "generation_marker.txt"
+        marker_path.unlink(missing_ok=True)
+
+        for case_number in range(1, packing_num + 1):
+            for attempt_index, packing_density in enumerate(attempt_densities):
+                attempt = Attempt(
+                    case_number=case_number,
+                    packing_density=packing_density,
+                    is_final_attempt=attempt_index == len(attempt_densities) - 1,
+                )
+                with marker_path.open("a") as marker_file:
+                    marker_file.write(
+                        f"Generation {attempt.case_number} - {attempt.packing_density}\n"
+                    )
+                self.CreateInitialCases(attempt, initial_case_creator)
+                if self.RunDEM(attempt):
                     break
-            self.packing_cnt += 1
