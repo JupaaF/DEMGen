@@ -77,7 +77,13 @@ This [MDPA][mdpa_link] file is used for storing the particle information of a pa
 
 ### Running Simulations
 
-To run a simulation, launch the [DEMGen_framework_main.py][DEMGen_framework_main] inside the folder [./src][src_folder]. For running the file correctly, please modify the "aim_path" (at the last of the file) to your own case path (absolute one).
+To run a simulation, pass the path of the parameter JSON file to [DEMGen_framework_main.py][DEMGen_framework_main]:
+
+```bash
+python src/DEMGen_framework_main.py path/to/ParametersDEMGen.json
+```
+
+The path can be absolute or relative to the directory from which the command is run.
 
 #### Packing Generation
 

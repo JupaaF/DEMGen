@@ -9,9 +9,7 @@ __date__        = "Feb 23, 2026"
 __license__     = "BSD 2-Clause License"
 #/////////////////////////////////////////////////
 
-#!!! It only wroks for Windows now
-
-import platform, os, sys, zipfile, subprocess
+import platform, os, re, sys, zipfile, subprocess
 
 def setup_environment():
     # Get the absolute path to the directory containing this script
@@ -55,41 +53,52 @@ def setup_environment():
         os.environ["Path"] = f"{libs_path};{os.environ.get('Path', '')}"
 
     elif system == "Linux":
-        # Construct absolute paths
-        kratos_path = os.path.abspath(os.path.join(base, "src", "external", "kratos_linux", "Release"))
+        # The Linux build is installed locally from the Kratos source tree.
+        kratos_path = os.path.abspath(os.path.join(base, "external", "kratos_linux", "bin", "Release"))
         libs_path = os.path.join(kratos_path, "libs")
-        
-        # --- UNZIP FOR LINUX ---
-        kratos_zip_path = os.path.abspath(os.path.join(base, "src", "external", "kratos_win"))
-        release_zip = os.path.join(kratos_zip_path, "Release.zip")
-        if os.path.exists(release_zip):
-            with zipfile.ZipFile(release_zip, 'r') as zip_ref:
-                zip_ref.extractall(kratos_zip_path)
+
+        if not os.path.isdir(kratos_path) or not os.path.isdir(libs_path):
+            raise RuntimeError(
+                "Linux Kratos build not found. Build it in "
+                "external/kratos_linux/bin/Release before running this script."
+            )
         
         # --- PERMANENTLY UPDATE .bashrc (Linux) ---
         bashrc = os.path.expanduser("~/.bashrc")
-        # Define the lines to be added
-        env_lines = [
-            f'\n# Kratos Environment Variables',
-            f'export PYTHONPATH="{kratos_path}:$PYTHONPATH"',
+        begin_marker = "# >>> DEMGen Kratos environment >>>"
+        end_marker = "# <<< DEMGen Kratos environment <<<"
+        env_block = (
+            f"\n{begin_marker}\n"
+            f'export PYTHONPATH="{kratos_path}:$PYTHONPATH"\n'
             f'export LD_LIBRARY_PATH="{libs_path}:$LD_LIBRARY_PATH"\n'
-        ]
-        
-        # Read bashrc to check if already added
-        already_set = False
+            f"{end_marker}\n"
+        )
+
         if os.path.exists(bashrc):
             with open(bashrc, "r") as f:
-                if kratos_path in f.read():
-                    already_set = True
-        
-        if not already_set:
-            try:
-                with open(bashrc, "a") as f:
-                    f.writelines(env_lines)
-                print(f"Success: Kratos paths added to {bashrc} permanently.")
-                print("Please run 'source ~/.bashrc' or restart your terminal.")
-            except Exception as e:
-                print(f"Failed to update .bashrc: {e}")
+                bashrc_contents = f.read()
+        else:
+            bashrc_contents = ""
+
+        marker_pattern = re.compile(
+            rf"\n?{re.escape(begin_marker)}.*?{re.escape(end_marker)}\n?",
+            re.DOTALL,
+        )
+        # Remove the malformed legacy line written by earlier Linux setup versions.
+        bashrc_contents = re.sub(
+            r"\n?# Kratos Environment Variables[^\n]*\n?",
+            "\n",
+            bashrc_contents,
+        )
+        bashrc_contents = marker_pattern.sub("\n", bashrc_contents).rstrip() + env_block
+
+        try:
+            with open(bashrc, "w") as f:
+                f.write(bashrc_contents)
+            print(f"Success: Kratos paths added to {bashrc} permanently.")
+            print("Please run 'source ~/.bashrc' or restart your terminal.")
+        except Exception as e:
+            print(f"Failed to update .bashrc: {e}")
 
         # --- UPDATE CURRENT PROCESS MEMORY ---
         os.environ["PYTHONPATH"] = f"{kratos_path}:{os.environ.get('PYTHONPATH', '')}"

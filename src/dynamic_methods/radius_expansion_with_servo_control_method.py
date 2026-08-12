@@ -55,9 +55,9 @@ class RadiusExpansionWithServoControlMethod(DynamicMethod):
             os.chdir(current_path)
             return False
 
-    def Run(self, parameters, ini_path):
+    def Run(self, parameters, ini_path, run_path):
 
-        self.Initialization(parameters, ini_path)
+        self.Initialization(parameters, ini_path, run_path)
         packing_num = self.parameters["packing_num"]
         target_packing_density = self.parameters["random_particle_generation_parameters"]["target_packing_density"]
         packing_density_delta_list = self.parameters["random_particle_generation_parameters"]["packing_density_delta_list"]

@@ -17,10 +17,12 @@ class PackingCharacterization():
 
         pass
 
-    def Initialization(self, parameters, ini_path):
+    def Initialization(self, parameters, ini_path, run_path):
 
         self.parameters = parameters
         self.ini_path = ini_path
+        self.run_path = run_path
+        os.chdir(self.run_path)
         self.dt = self.parameters["dem_time_step"]
 
     def CreateInitialCases(self):
@@ -37,9 +39,8 @@ class PackingCharacterization():
         except ValueError:
             raise ValueError("This function should only be accessed in the derived class.")
     
-    def Run(self, parameters, ini_path):
+    def Run(self, parameters, ini_path, run_path):
 
-        self.Initialization(parameters, ini_path)
+        self.Initialization(parameters, ini_path, run_path)
         self.CreateInitialCases()
         self.RunDEM()
-

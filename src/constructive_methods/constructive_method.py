@@ -17,10 +17,12 @@ class ConstructiveMethod():
 
         pass
 
-    def Initialization(self, parameters, ini_path):
+    def Initialization(self, parameters, ini_path, run_path):
 
         self.parameters = parameters
         self.ini_path = ini_path
+        self.run_path = run_path
+        os.chdir(self.run_path)
         self.particle_list = []
         self.dt = self.parameters['max_time_step']
 
@@ -169,9 +171,9 @@ class ConstructiveMethod():
         aim_file_path_and_name = os.path.join(aim_path, 'show_packing.py')
         shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
-    def Run(self, parameters, ini_path):
+    def Run(self, parameters, ini_path, run_path):
 
-        self.Initialization(parameters, ini_path)
+        self.Initialization(parameters, ini_path, run_path)
         self.CreateInitialPackings()
         self.WriteOutMdpaFileOfParticles("inletPGDEM.mdpa")
         self.CopyFilesAndRunShowResults()

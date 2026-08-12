@@ -9,19 +9,9 @@ __date__        = "June 20, 2024"
 __license__     = "BSD 2-Clause License"
 #/////////////////////////////////////////////////
 
-import os
 import json
-import sys
-
-from tkinter import Tk
-from tkinter.filedialog import askopenfilename
-
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from src import *
-from constructive_methods import *
-from dynamic_methods import *
-from data_processing.pre_processing import *
-from data_processing.post_processing import *
+import argparse
+from pathlib import Path
 
 class DEMGenMainFramework():
 
@@ -29,19 +19,13 @@ class DEMGenMainFramework():
         
         print('-'*76 + '\n')
 
-    ####################main processes#############################################
-    def Initilization(self, aim_path):
-        
-        #read parameter.json file
-        #file_path = self.choose_file()
-        file_path = aim_path
-        
-        if file_path:
-            self.set_working_directory(file_path)
-            self.parameters = self.read_json(file_path)
-        else:
-            print("No file selected")
-            exit(0)
+    # ----------------- Main Process ----------------- #
+
+    def Initilization(self, parameters_path):
+
+        self.parameters_path = Path(parameters_path).expanduser().resolve()
+        self.set_paths()
+        self.read_json(self.parameters_path)
 
     def GenerationRun(self):
         
@@ -50,43 +34,43 @@ class DEMGenMainFramework():
 
             from dynamic_methods import gravitational_deposition_method
             MyDEM = gravitational_deposition_method.GravitationalDepositionMethod()
-            MyDEM.Run(self.parameters, self.ini_path)
+            MyDEM.Run(self.parameters, self.ini_path, self.run_path)
 
         elif self.parameters["generator_name"] == "isotropic_compression_method":
             
             from dynamic_methods import isotropic_compression_method
             MyDEM = isotropic_compression_method.IsotropicCompressionMethod()
-            MyDEM.Run(self.parameters, self.ini_path)
+            MyDEM.Run(self.parameters, self.ini_path, self.run_path)
 
         elif self.parameters["generator_name"] == "radius_expansion_method":
             
             from dynamic_methods import radius_expansion_method
             MyDEM = radius_expansion_method.RadiusExpansionMethod()
-            MyDEM.Run(self.parameters, self.ini_path)
+            MyDEM.Run(self.parameters, self.ini_path, self.run_path)
 
         elif self.parameters["generator_name"] == "radius_expansion_with_servo_control_method":
             
             from src.dynamic_methods import radius_expansion_with_servo_control_method
             MyDEM = radius_expansion_with_servo_control_method.RadiusExpansionWithServoControlMethod()
-            MyDEM.Run(self.parameters, self.ini_path)
+            MyDEM.Run(self.parameters, self.ini_path, self.run_path)
 
         elif self.parameters["generator_name"] == "improved_radius_expansion_with_servo_control_method":
 
             from dynamic_methods import improved_radius_expansion_with_servo_control_method
             MyDEM = improved_radius_expansion_with_servo_control_method.ImprovedRadiusExpansionWithServoControlMethod()
-            MyDEM.Run(self.parameters, self.ini_path)
+            MyDEM.Run(self.parameters, self.ini_path, self.run_path)
 
         elif self.parameters["generator_name"] == "cubic_arrangement_method":
 
             from constructive_methods import cubic_arrangement_method
             MyDEM = cubic_arrangement_method.CubicArrangementMethod()
-            MyDEM.Run(self.parameters, self.ini_path)
+            MyDEM.Run(self.parameters, self.ini_path, self.run_path)
 
         elif self.parameters["generator_name"] == "hpc_arrangement_method":
 
             from constructive_methods import hpc_arrangement_method
             MyDEM = hpc_arrangement_method.HpcArrangementMethod()
-            MyDEM.Run(self.parameters, self.ini_path)
+            MyDEM.Run(self.parameters, self.ini_path, self.run_path)
         
         else:
             print("No (or wrong) generator name given")
@@ -104,11 +88,11 @@ class DEMGenMainFramework():
                 if self.parameters["packing_num"] > 1:
                     from data_processing.post_processing import packing_characterization_multi
                     MyDEMChara = packing_characterization_multi.PackingCharacterizationMulti()
-                    MyDEMChara.Run(self.parameters, self.ini_path)
+                    MyDEMChara.Run(self.parameters, self.ini_path, self.run_path)
                 else:
                     from data_processing.post_processing import packing_characterization_single
                     MyDEMChara = packing_characterization_single.PackingCharacterizationSingle()
-                    MyDEMChara.Run(self.parameters, self.ini_path)
+                    MyDEMChara.Run(self.parameters, self.ini_path, self.run_path)
             
             else:
                 pass
@@ -117,50 +101,32 @@ class DEMGenMainFramework():
 
         print("Particle packing characterization finished.")
 
-    def Finalization(self):
-        
-        print("Successfully finish!")
+    def set_paths(self):
+        """Resolve the paths used by a DEMGen run without changing the CWD."""
 
-    ####################detail functions################################################
-    def choose_file(self):
-
-        print(f'Please select a ParametersDEMGen.json file for starting:')
-
-        root = Tk()
-        root.withdraw()
-        
-        file_path = askopenfilename(
-            filetypes=[("JSON files", "*.json")], 
-            title="Select ParametersDEMGen.json file"
-        )
-
-        print("Parameters file for DEMGen selected.")
-        
-        return file_path
-
-    def set_working_directory(self, file_path):
-
-        self.ini_path = os.getcwd()
-        if self.ini_path.endswith('src'):
-            self.ini_path = os.path.dirname(self.ini_path)
-
-        directory = os.path.dirname(file_path)
-        os.chdir(directory)
-        print(f"Set current working directory: {os.getcwd()}")
+        self.ini_path = Path(__file__).resolve().parent.parent
+        self.run_path = self.parameters_path.parent
+        print(f"Run directory: {self.run_path}")
 
     def read_json(self, file_path):
-
-        with open(file_path, 'r') as file:
-            parameters = json.load(file)
-        return parameters
+        try:
+            with open(file_path, 'r') as file:
+                self.parameters = json.load(file)
+        except:
+            raise
 
 
 if __name__ == "__main__":
-    
-    TestDEM = DEMGenMainFramework()
-    aim_path = 'C:\\Users\\10237\\Desktop\\DEMGen\\example\\test_improved_radius_expansion_with_servo_control_method\\ParametersDEMGen.json'
-    TestDEM.Initilization(aim_path)
-    TestDEM.GenerationRun()
-    TestDEM.CharacterizationRun()
-    TestDEM.Finalization()
-    
+    parser = argparse.ArgumentParser(
+        description="Generate and characterize a DEM particle packing."
+    )
+    parser.add_argument(
+        "parameters_path",
+        help="Path to the ParametersDEMGen JSON file.",
+    )
+    args = parser.parse_args()
+
+    demgen = DEMGenMainFramework()
+    demgen.Initilization(args.parameters_path)
+    demgen.GenerationRun()
+    demgen.CharacterizationRun()
