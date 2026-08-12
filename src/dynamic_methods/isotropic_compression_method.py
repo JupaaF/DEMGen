@@ -49,8 +49,10 @@ class IsotropicCompressionMethod(DynamicMethod):
 
         for case_number in range(1, self.parameters["packing_num"] + 1):
             case_path = Path(self.run_path) / "generated_cases" / f"case_{case_number}"
+            script_path = Path(self.ini_path) / "src" / "utilities" / "isotropic_compression_method_run.py"
+            case_parameters_path = case_path / "demgen_case_parameters.json"
             subprocess.run(
-                [sys.executable, "isotropic_compression_method_run.py"],
+                [sys.executable, script_path, "--case-parameters", case_parameters_path],
                 cwd=case_path,
                 check=True,
             )

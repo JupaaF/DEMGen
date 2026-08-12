@@ -74,7 +74,22 @@ class CreateParticlesInsideOfADomain():
         self.case_path = self.generated_cases_path / f"case_{request.case_number}"
 
         self.create_new_cases_folder()
+        self.write_case_parameters()
         self.copy_seed_files_to_aim_folders()
+
+    def write_case_parameters(self):
+        case_parameters = {
+            "attempt_packing_density": self.parameters["target_packing_density"].GetDouble(),
+            "servo_target_packing_density": self.initial_target_packing_density,
+            "domain_scale_multiplier": self.parameters["domain_scale_multiplier"].GetDouble(),
+            "tolerance_of_packing_density": self.tolerance_of_packing_density,
+            "tolerance_of_unbalanced_force": self.tolerance_of_unbalanced_force,
+            "tolerance_of_target_mean_stress": self.tolerance_of_target_mean_stress,
+            "minimum_mean_stress": self.minimum_mean_stress,
+        }
+        parameters_path = self.case_path / "demgen_case_parameters.json"
+        with parameters_path.open("w", encoding="utf-8") as parameters_file:
+            json.dump(case_parameters, parameters_file, indent=2)
 
     def clear_old_cases_folder(self):
 
@@ -97,61 +112,11 @@ class CreateParticlesInsideOfADomain():
             shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
         if self.parameters_all["generator_name"].GetString() == "isotropic_compression_method":
-            seed_file_path_and_name = self.context.project_root / 'src' / 'utilities' / 'isotropic_compression_method_run.py'
-            aim_file_path_and_name = self.case_path / 'isotropic_compression_method_run.py'
-            with open(seed_file_path_and_name, "r") as f_material:
-                    with open(aim_file_path_and_name, "w") as f_material_w:
-                        for line in f_material.readlines():
-                            if "domain_scale_multiplier_input" in line:
-                                line = line.replace("1.5", str(self.parameters["domain_scale_multiplier"].GetDouble()))
-                            f_material_w.write(line)
-
             seed_file_name_list = ['inletPGDEM_FEM_boundary.mdpa']
             for seed_file_name in seed_file_name_list:
                 seed_file_path_and_name = self.context.project_root / 'src' / 'utilities' / 'rem_seed_files' / seed_file_name
                 aim_file_path_and_name = self.case_path / seed_file_name
                 shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
-
-        elif self.parameters_all["generator_name"].GetString() == "radius_expansion_method":
-            seed_file_path_and_name = self.context.project_root / 'src' / 'utilities' / 'radius_expansion_method_run_v1.4.py'
-            aim_file_path_and_name = self.case_path / 'radius_expansion_method_run_v1.4.py'
-            shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
-
-        elif self.parameters_all["generator_name"].GetString() == "radius_expansion_with_servo_control_method":
-            seed_file_name_list = ['radius_expansion_with_servo_control_method_run.py', 'radius_expansion_with_servo_control_method_run_final.py', 'plot_stress.py']
-            for seed_file_name in seed_file_name_list:
-                seed_file_path_and_name = self.context.project_root / 'src' / 'utilities' / seed_file_name
-                aim_file_path_and_name = self.case_path / seed_file_name
-                with open(seed_file_path_and_name, "r") as f_material:
-                    with open(aim_file_path_and_name, "w") as f_material_w:
-                        for line in f_material.readlines():
-                            if "self.target_packing_density =" in line:
-                                line = line.replace("0.64", str(self.initial_target_packing_density))
-                            if "ax2.axhline(y=" in line:
-                                line = line.replace("0.635", str(self.initial_target_packing_density))
-                            f_material_w.write(line)
-
-        elif self.parameters_all["generator_name"].GetString() == "improved_radius_expansion_with_servo_control_method":
-            seed_file_name_list = ['improved_radius_expansion_with_servo_control_method_run.py', 'improved_radius_expansion_with_servo_control_method_run_final.py', 'plot_stress.py']
-            for seed_file_name in seed_file_name_list:
-                seed_file_path_and_name = self.context.project_root / 'src' / 'utilities' / seed_file_name
-                aim_file_path_and_name = self.case_path / seed_file_name
-                with open(seed_file_path_and_name, "r") as f_material:
-                    with open(aim_file_path_and_name, "w") as f_material_w:
-                        for line in f_material.readlines():
-                            if "self.target_packing_density =" in line:
-                                line = line.replace("0.64", str(self.initial_target_packing_density))
-                            if "ax2.axhline(y=" in line:
-                                line = line.replace("0.635", str(self.initial_target_packing_density))
-                            if "self.tolerance_of_packing_density =" in line:
-                                line = line.replace("0.0001", str(self.tolerance_of_packing_density))
-                            if "self.tolerance_of_unbalanced_force =" in line:
-                                line = line.replace("0.01", str(self.tolerance_of_unbalanced_force))
-                            if "self.tolerance_of_target_mean_stress =" in line:
-                                line = line.replace("100", str(self.tolerance_of_target_mean_stress))
-                            if "self.minimum_mean_stress =" in line:
-                                line = line.replace("1000", str(self.minimum_mean_stress))
-                            f_material_w.write(line)
 
         seed_file_path_and_name = self.context.project_root / 'src' / 'utilities' / 'show_packing.py'
         aim_file_path_and_name = self.case_path / 'show_packing.py'

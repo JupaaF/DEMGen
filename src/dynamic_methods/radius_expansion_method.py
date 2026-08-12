@@ -50,8 +50,9 @@ class RadiusExpansionMethod(DynamicMethod):
 
         for case_number in range(1, self.parameters["packing_num"] + 1):
             case_path = Path(self.run_path) / "generated_cases" / f"case_{case_number}"
+            script_path = Path(self.ini_path) / "src" / "utilities" / "radius_expansion_method_run_v1.4.py"
             subprocess.run(
-                [sys.executable, "radius_expansion_method_run_v1.4.py"],
+                [sys.executable, script_path],
                 cwd=case_path,
                 check=True,
             )

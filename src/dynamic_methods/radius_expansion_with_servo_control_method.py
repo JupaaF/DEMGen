@@ -55,7 +55,13 @@ class RadiusExpansionWithServoControlMethod(DynamicMethod):
     def _run_case_script(self, script_name, attempt):
 
         case_path = Path(self.run_path) / "generated_cases" / f"case_{attempt.case_number}"
-        subprocess.run([sys.executable, script_name], cwd=case_path, check=True)
+        script_path = Path(self.ini_path) / "src" / "utilities" / script_name
+        case_parameters_path = case_path / "demgen_case_parameters.json"
+        subprocess.run(
+            [sys.executable, script_path, "--case-parameters", case_parameters_path],
+            cwd=case_path,
+            check=True,
+        )
         return (case_path / "success.txt").is_file()
 
     def Run(self, parameters, ini_path, run_path):

@@ -9,6 +9,7 @@ __date__        = "Dec 02, 2024"
 __license__     = "BSD 2-Clause License"
 #/////////////////////////////////////////////////
 
+import argparse
 import time
 import sys
 import shutil
@@ -21,6 +22,8 @@ from KratosMultiphysics import *
 from KratosMultiphysics.DEMApplication import *
 from KratosMultiphysics.DEMApplication.DEM_analysis_stage import DEMAnalysisStage
 from KratosMultiphysics import Logger
+
+from demgen_case_parameters import load_case_parameters
 
 if os.path.exists("normalized_kinematic_energy.txt"):
     os.remove("normalized_kinematic_energy.txt")
@@ -110,7 +113,7 @@ def GetParticleDataFromMdpa(aim_mdpa_file_name):
 
 class DEMAnalysisStageWithFlush(DEMAnalysisStage):
 
-    def __init__(self, model, project_parameters, radius_multiplier, ini_p_pram_list, flush_frequency=10.0):
+    def __init__(self, model, project_parameters, radius_multiplier, ini_p_pram_list, case_parameters, flush_frequency=10.0):
         super().__init__(model, project_parameters)
         self.flush_frequency = flush_frequency
         self.last_flush = time.time()
@@ -118,6 +121,7 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
         self.radius_multiplier = radius_multiplier
         self.normalized_kinematic_energy = 1e10
         self.ini_p_pram_list = ini_p_pram_list
+        self.case_parameters = case_parameters
         self.start_reset_velocity = False
         self.second_stage_flag = False
         self.is_in_inaccessibale_region2 = False
@@ -132,7 +136,7 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
         self.final_check_counter_reset = 0
         self.final_check_counter_ini = 0
         self.measured_stress_list = []
-        self.target_packing_density = 0.64
+        self.target_packing_density = self.case_parameters["servo_target_packing_density"]
         self.ZeroFrictionPhase = False
         self.zero_friction_phase_counter = 0
 
@@ -474,6 +478,11 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
         self.second_stage_flag = True
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--case-parameters", required=True)
+    arguments = parser.parse_args()
+    case_parameters = load_case_parameters(arguments.case_parameters)
+
     Logger.GetDefaultOutput().SetSeverity(Logger.Severity.INFO)
     radius_multiplier = 1.0
     NormalizedKineticEnergy = 1e8
@@ -491,7 +500,7 @@ if __name__ == "__main__":
         #if radius_multiplier >= 2.1:
         #    parameters["FinalTime"].SetDouble(10)
         global_model = KratosMultiphysics.Model()
-        MyDemCase = DEMAnalysisStageWithFlush(global_model, parameters, radius_multiplier, ini_p_pram_list)
+        MyDemCase = DEMAnalysisStageWithFlush(global_model, parameters, radius_multiplier, ini_p_pram_list, case_parameters)
         #MyDemCase.Run()
         MyDemCase.Initialize()
         MyDemCase.RunSolutionLoop()
@@ -513,10 +522,9 @@ if __name__ == "__main__":
 
     parameters["FinalTime"].SetDouble(10)
     global_model = KratosMultiphysics.Model()
-    MyDemCase = DEMAnalysisStageWithFlush(global_model, parameters, radius_multiplier, ini_p_pram_list)
+    MyDemCase = DEMAnalysisStageWithFlush(global_model, parameters, radius_multiplier, ini_p_pram_list, case_parameters)
     MyDemCase.Initialize()
     MyDemCase.SetResetStart()
     MyDemCase.RunSolutionLoop()
     #NormalizedKineticEnergy = MyDemCase.PassNormalizedKineticEnergy()
     MyDemCase.Finalize()
-

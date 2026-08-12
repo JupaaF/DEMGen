@@ -9,6 +9,8 @@ __date__        = "June 26, 2024"
 __license__     = "BSD 2-Clause License"
 #/////////////////////////////////////////////////
 
+import argparse
+
 import KratosMultiphysics
 from KratosMultiphysics import *
 from KratosMultiphysics.DEMApplication import *
@@ -19,11 +21,14 @@ from sys import exit
 import random
 import shutil
 
+from demgen_case_parameters import load_case_parameters
+
 class IsotropicCompressionTestRun(DEMAnalysisStage):
 
-    def __init__(self, model, parameters):
+    def __init__(self, model, parameters, case_parameters):
         super().__init__(model, parameters)
         self.parameters = parameters
+        self.case_parameters = case_parameters
 
     def Initialize(self):
         super().Initialize()
@@ -43,7 +48,7 @@ class IsotropicCompressionTestRun(DEMAnalysisStage):
         self.graph_export_freq = self.parameters["GraphExportFreq"].GetDouble()
         self.final_check_frequency  = int(self.graph_export_freq / self.parameters["MaxTimeStep"].GetDouble())
         self.final_packing_lenth_ini  = self.parameters["BoundingBoxMaxX"].GetDouble() - self.parameters["BoundingBoxMinX"].GetDouble()
-        self.domain_scale_multiplier_input = 1.5
+        self.domain_scale_multiplier_input = self.case_parameters["domain_scale_multiplier"]
         self.domain_scale_multiplier = self.domain_scale_multiplier_input
         self.total_compression_distance = self.final_packing_lenth_ini / (self.domain_scale_multiplier * 2.0) 
         self.final_packing_lenth = (self.parameters["BoundingBoxMaxX"].GetDouble() - self.parameters["BoundingBoxMinX"].GetDouble()) / self.domain_scale_multiplier
@@ -246,10 +251,14 @@ class IsotropicCompressionTestRun(DEMAnalysisStage):
                 shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--case-parameters", required=True)
+    arguments = parser.parse_args()
+    case_parameters = load_case_parameters(arguments.case_parameters)
 
     with open("ProjectParametersDEM.json", 'r') as parameter_file:
         parameters = KratosMultiphysics.Parameters(parameter_file.read())
 
         model = KratosMultiphysics.Model()
-        run_dem = IsotropicCompressionTestRun(model, parameters)
+        run_dem = IsotropicCompressionTestRun(model, parameters, case_parameters)
         run_dem.Run()
