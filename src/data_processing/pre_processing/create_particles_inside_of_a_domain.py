@@ -9,20 +9,31 @@ __date__        = "August 2, 2023"
 __license__     = "BSD 2-Clause License"
 #/////////////////////////////////////////////////
 
-import os
+import json
 import random
 import shutil
 import math
 from KratosMultiphysics import *
 from KratosMultiphysics.DEMApplication import *
+from data_processing.pre_processing.particle_case_request import (
+    ParticleCaseRequest,
+    ParticleGenerationContext,
+)
 
 class CreateParticlesInsideOfADomain():
 
-    def __init__(self) -> None:
+    def __init__(self, context: ParticleGenerationContext) -> None:
 
+        self.context = context
+        self.generated_cases_path = self.context.run_dir / "generated_cases"
         self.clear_old_cases_folder()
 
-    def Initialize(self, RVE_size, domain_scale_multiplier, packing_cnt, ini_path, try_packing_density = 0.0):
+    def create_case(self, request: ParticleCaseRequest):
+        self.Initialize(request)
+        self.CreateParticles()
+        self.WriteOutGIDData(request.output_file_name)
+
+    def Initialize(self, request: ParticleCaseRequest):
         
         self.particle_list = []
         self.particle_list_left = []
@@ -33,9 +44,17 @@ class CreateParticlesInsideOfADomain():
         self.particle_list_behind = []
         self.particle_list_side = []
 
-        RVE_length_x = RVE_size[0]
-        RVE_length_y = RVE_size[1]
-        RVE_length_z = RVE_size[2]
+        self.rve_size = [
+            self.context.parameters["domain_length_x"],
+            self.context.parameters["domain_length_y"],
+            self.context.parameters["domain_length_z"],
+        ]
+        domain_scale_multiplier = self.context.parameters[
+            "random_particle_generation_parameters"
+        ]["domain_scale_multiplier"]
+        RVE_length_x = self.rve_size[0]
+        RVE_length_y = self.rve_size[1]
+        RVE_length_z = self.rve_size[2]
 
         #two times the RVE size
 
@@ -46,17 +65,16 @@ class CreateParticlesInsideOfADomain():
         self.z_min = -0.5 * domain_scale_multiplier * RVE_length_z
         self.z_max = 0.5 * domain_scale_multiplier * RVE_length_z
 
-        parameters_file = open("ParametersDEMGen.json", 'r')
-        self.parameters_all = Parameters(parameters_file.read())
+        self.parameters_all = Parameters(json.dumps(self.context.parameters))
         self.parameters = self.parameters_all["random_particle_generation_parameters"]
         self.initial_target_packing_density = self.parameters["target_packing_density"].GetDouble()
         self.tolerance_of_packing_density = self.parameters["tolerance_of_packing_density"].GetDouble()
         self.tolerance_of_unbalanced_force = self.parameters["tolerance_of_unbalanced_force"].GetDouble()
         self.tolerance_of_target_mean_stress = self.parameters["tolerance_of_target_mean_stress"].GetDouble()
         self.minimum_mean_stress = self.parameters["minimum_mean_stress"].GetDouble()
-        if try_packing_density != 0.0:
-            self.parameters["target_packing_density"].SetDouble(try_packing_density)
-        print("try_packing_density = {}".format(try_packing_density))
+        if request.packing_density is not None:
+            self.parameters["target_packing_density"].SetDouble(request.packing_density)
+        print("try_packing_density = {}".format(request.packing_density))
         print("target_packing_density = {}".format(self.parameters["target_packing_density"].GetDouble()))
         original_psd = self.parameters["random_variable_settings"]["possible_values"].GetVector()
         #scaled_pad = [x * self.parameters["random_variable_settings"]["radius_scale_multiplier"].GetDouble() for x in original_psd]
@@ -66,8 +84,8 @@ class CreateParticlesInsideOfADomain():
             scaled_psd.append(original_psd[i] * self.radius_scale_multiplier)
         self.parameters["random_variable_settings"]["possible_values"].SetVector(scaled_psd)
 
-        self.packing_cnt = packing_cnt
-        self.ini_path = ini_path
+        self.case_number = request.case_number
+        self.case_path = self.generated_cases_path / f"case_{request.case_number}"
 
         print("Before creating folder")
         self.create_new_cases_folder()
@@ -76,38 +94,27 @@ class CreateParticlesInsideOfADomain():
 
     def clear_old_cases_folder(self):
 
-        cases_folder_name = 'generated_cases'
-
-        if os.path.exists(cases_folder_name):
-            shutil.rmtree(cases_folder_name, ignore_errors=True)
-            os.makedirs(cases_folder_name)
-        else:
-            os.makedirs(cases_folder_name)
+        if self.generated_cases_path.exists():
+            shutil.rmtree(self.generated_cases_path, ignore_errors=True)
+        self.generated_cases_path.mkdir(parents=True, exist_ok=True)
 
     def create_new_cases_folder(self):
 
-        new_folder_name = "case_" + str(self.packing_cnt)
-        aim_path = os.path.join(os.getcwd(),'generated_cases', new_folder_name)
-        if os.path.exists(aim_path):
-            shutil.rmtree(aim_path, ignore_errors=True)
-            os.makedirs(aim_path)
-        else:
-            os.makedirs(aim_path)
+        if self.case_path.exists():
+            shutil.rmtree(self.case_path, ignore_errors=True)
+        self.case_path.mkdir(parents=True, exist_ok=True)
 
     def copy_seed_files_to_aim_folders(self):
 
-        aim_folder_name = "case_" + str(self.packing_cnt)
-        aim_path = os.path.join(os.getcwd(), "generated_cases", aim_folder_name)
-
         seed_file_name_list = ['MaterialsDEM.json', 'ProjectParametersDEM.json']
         for seed_file_name in seed_file_name_list:
-            seed_file_path_and_name = os.path.join(os.getcwd(), seed_file_name)
-            aim_file_path_and_name = os.path.join(aim_path, seed_file_name)
+            seed_file_path_and_name = self.context.run_dir / seed_file_name
+            aim_file_path_and_name = self.case_path / seed_file_name
             shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
         if self.parameters_all["generator_name"].GetString() == "isotropic_compression_method":
-            seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities', 'isotropic_compression_method_run.py')
-            aim_file_path_and_name = os.path.join(aim_path, 'isotropic_compression_method_run.py')
+            seed_file_path_and_name = self.context.project_root / 'src' / 'utilities' / 'isotropic_compression_method_run.py'
+            aim_file_path_and_name = self.case_path / 'isotropic_compression_method_run.py'
             with open(seed_file_path_and_name, "r") as f_material:
                     with open(aim_file_path_and_name, "w") as f_material_w:
                         for line in f_material.readlines():
@@ -117,20 +124,20 @@ class CreateParticlesInsideOfADomain():
 
             seed_file_name_list = ['inletPGDEM_FEM_boundary.mdpa']
             for seed_file_name in seed_file_name_list:
-                seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities','rem_seed_files', seed_file_name)
-                aim_file_path_and_name = os.path.join(aim_path, seed_file_name)
+                seed_file_path_and_name = self.context.project_root / 'src' / 'utilities' / 'rem_seed_files' / seed_file_name
+                aim_file_path_and_name = self.case_path / seed_file_name
                 shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
         elif self.parameters_all["generator_name"].GetString() == "radius_expansion_method":
-            seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities', 'radius_expansion_method_run_v1.4.py')
-            aim_file_path_and_name = os.path.join(aim_path, 'radius_expansion_method_run_v1.4.py')
+            seed_file_path_and_name = self.context.project_root / 'src' / 'utilities' / 'radius_expansion_method_run_v1.4.py'
+            aim_file_path_and_name = self.case_path / 'radius_expansion_method_run_v1.4.py'
             shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
         elif self.parameters_all["generator_name"].GetString() == "radius_expansion_with_servo_control_method":
             seed_file_name_list = ['radius_expansion_with_servo_control_method_run.py', 'radius_expansion_with_servo_control_method_run_final.py', 'plot_stress.py']
             for seed_file_name in seed_file_name_list:
-                seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities', seed_file_name)
-                aim_file_path_and_name = os.path.join(aim_path, seed_file_name)
+                seed_file_path_and_name = self.context.project_root / 'src' / 'utilities' / seed_file_name
+                aim_file_path_and_name = self.case_path / seed_file_name
                 with open(seed_file_path_and_name, "r") as f_material:
                     with open(aim_file_path_and_name, "w") as f_material_w:
                         for line in f_material.readlines():
@@ -143,8 +150,8 @@ class CreateParticlesInsideOfADomain():
         elif self.parameters_all["generator_name"].GetString() == "improved_radius_expansion_with_servo_control_method":
             seed_file_name_list = ['improved_radius_expansion_with_servo_control_method_run.py', 'improved_radius_expansion_with_servo_control_method_run_final.py', 'plot_stress.py']
             for seed_file_name in seed_file_name_list:
-                seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities', seed_file_name)
-                aim_file_path_and_name = os.path.join(aim_path, seed_file_name)
+                seed_file_path_and_name = self.context.project_root / 'src' / 'utilities' / seed_file_name
+                aim_file_path_and_name = self.case_path / seed_file_name
                 with open(seed_file_path_and_name, "r") as f_material:
                     with open(aim_file_path_and_name, "w") as f_material_w:
                         for line in f_material.readlines():
@@ -162,11 +169,11 @@ class CreateParticlesInsideOfADomain():
                                 line = line.replace("1000", str(self.minimum_mean_stress))
                             f_material_w.write(line)
 
-        seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities', 'show_packing.py')
-        aim_file_path_and_name = os.path.join(aim_path, 'show_packing.py')
+        seed_file_path_and_name = self.context.project_root / 'src' / 'utilities' / 'show_packing.py'
+        aim_file_path_and_name = self.case_path / 'show_packing.py'
         shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
-    def CreateParticles(self, RVE_size):
+    def CreateParticles(self):
 
         is_first_particle = True
         particle_cnt = 1
@@ -175,7 +182,7 @@ class CreateParticlesInsideOfADomain():
         target_packing_density = self.parameters["target_packing_density"].GetDouble()
         print("target_packing_density = {}".format(target_packing_density))
         radius_scale_multiplier = self.parameters["random_variable_settings"]["radius_scale_multiplier"].GetDouble()
-        aim_volume = RVE_size[0] * RVE_size[1] * RVE_size[2] * target_packing_density * (radius_scale_multiplier ** 3)
+        aim_volume = self.rve_size[0] * self.rve_size[1] * self.rve_size[2] * target_packing_density * (radius_scale_multiplier ** 3)
 
         seed = self.parameters["SEED"].GetInt()
         if "DO_USE_SEED" in self.parameters.keys():
@@ -425,15 +432,11 @@ class CreateParticlesInsideOfADomain():
                 particle_cnt += 1
                 particle_volume += 4/3 * math.pi * (r**3)
 
-    def WriteOutGIDData(self, aim_folder_name, aim_file_name):
+    def WriteOutGIDData(self, aim_file_name):
 
-        aim_path_and_name = os.path.join(os.getcwd(), "generated_cases", aim_folder_name, aim_file_name)
+        aim_path_and_name = self.case_path / aim_file_name
 
-        # clean the exsisted file first
-        if os.path.isfile(aim_path_and_name):
-            os.remove(aim_path_and_name)
-
-        with open(aim_path_and_name,'a') as f:
+        with aim_path_and_name.open('w') as f:
             # write the particle information
             f.write("Begin ModelPartData \n //  VARIABLE_NAME value \n End ModelPartData \n \n Begin Properties 0 \n End Properties \n \n")
             f.write("Begin Nodes\n")
@@ -489,6 +492,4 @@ class CreateParticlesInsideOfADomain():
                 f.write("End SubModelPartElements \n")
                 f.write("Begin SubModelPartConditions \n End SubModelPartConditions \n End SubModelPart \n")
 
-            f.close()
-
-        print("Successfully write out file {}-{}!".format(aim_folder_name, aim_file_name))
+        print("Successfully write out file case_{}-{}!".format(self.case_number, aim_file_name))

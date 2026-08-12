@@ -9,9 +9,15 @@ __date__        = "June 21, 2024"
 __license__     = "BSD 2-Clause License"
 #/////////////////////////////////////////////////
 
-import os
+from pathlib import Path
+import subprocess
+import sys
 from dynamic_methods.dynamic_method import DynamicMethod
-from src.data_processing.pre_processing import create_particles_inside_of_a_domain
+from data_processing.pre_processing import create_particles_inside_of_a_domain
+from data_processing.pre_processing.particle_case_request import (
+    ParticleCaseRequest,
+    ParticleGenerationContext,
+)
 
 class IsotropicCompressionMethod(DynamicMethod):
 
@@ -21,32 +27,30 @@ class IsotropicCompressionMethod(DynamicMethod):
 
     def CreateInitialCases(self):
 
-        CreateIniCases = create_particles_inside_of_a_domain.CreateParticlesInsideOfADomain()
-        RVE_size = [self.parameters["domain_length_x"], self.parameters["domain_length_y"], self.parameters["domain_length_z"]]
+        initial_case_creator = create_particles_inside_of_a_domain.CreateParticlesInsideOfADomain(
+            ParticleGenerationContext(
+                parameters=self.parameters,
+                project_root=Path(self.ini_path),
+                run_dir=Path(self.run_path),
+            )
+        )
         packing_num = self.parameters["packing_num"]
-        domain_scale_multiplier = self.parameters["random_particle_generation_parameters"]["domain_scale_multiplier"]
         aim_file_name = 'inletPGDEM.mdpa'
 
-        packing_cnt = 1
-        while packing_cnt <= packing_num:
-            CreateIniCases.Initialize(RVE_size, domain_scale_multiplier, packing_cnt, self.ini_path)
-            CreateIniCases.CreateParticles()
-            aim_folder_name = "case_" + str(packing_cnt)
-            CreateIniCases.WriteOutGIDData(aim_folder_name, aim_file_name)
-            packing_cnt += 1
+        for case_number in range(1, packing_num + 1):
+            initial_case_creator.create_case(
+                ParticleCaseRequest(
+                    case_number=case_number,
+                    output_file_name=aim_file_name,
+                )
+            )
 
     def RunDEM(self):
 
-        packing_num = self.parameters["packing_num"]
-        packing_cnt = 1
-        current_path = os.getcwd()
-        while packing_cnt <= packing_num:
-            aim_folder_name = "case_" + str(packing_cnt)
-            aim_path = os.path.join(current_path, "generated_cases", aim_folder_name)
-            os.chdir(aim_path)
-            if os.name == 'nt': # for windows
-                os.system("python isotropic_compression_method_run.py")
-            else: # for linux
-                os.system("python3 isotropic_compression_method_run.py")
-            os.chdir(current_path)
-            packing_cnt += 1
+        for case_number in range(1, self.parameters["packing_num"] + 1):
+            case_path = Path(self.run_path) / "generated_cases" / f"case_{case_number}"
+            subprocess.run(
+                [sys.executable, "isotropic_compression_method_run.py"],
+                cwd=case_path,
+                check=True,
+            )

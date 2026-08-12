@@ -10,13 +10,16 @@ __license__     = "BSD 2-Clause License"
 #/////////////////////////////////////////////////
 
 from dataclasses import dataclass
-import os
 from pathlib import Path
 import subprocess
 import sys
 
 from dynamic_methods.dynamic_method import DynamicMethod
 from data_processing.pre_processing import create_particles_inside_of_a_domain
+from data_processing.pre_processing.particle_case_request import (
+    ParticleCaseRequest,
+    ParticleGenerationContext,
+)
 
 
 @dataclass(frozen=True)
@@ -32,19 +35,13 @@ class RadiusExpansionWithServoControlMethod(DynamicMethod):
         super().__init__()
 
     def CreateInitialCases(self, attempt, initial_case_creator):
-        RVE_size = [self.parameters["domain_length_x"], self.parameters["domain_length_y"], self.parameters["domain_length_z"]]
-        domain_scale_multiplier = self.parameters["random_particle_generation_parameters"]["domain_scale_multiplier"]
-        aim_file_name = 'inletPGDEM_ini.mdpa'
-
-        initial_case_creator.Initialize(
-            RVE_size,
-            domain_scale_multiplier,
-            attempt.case_number,
-            self.ini_path,
-            attempt.packing_density,
+        initial_case_creator.create_case(
+            ParticleCaseRequest(
+                case_number=attempt.case_number,
+                output_file_name='inletPGDEM_ini.mdpa',
+                packing_density=attempt.packing_density,
+            )
         )
-        initial_case_creator.CreateParticles(RVE_size)
-        initial_case_creator.WriteOutGIDData(f"case_{attempt.case_number}", aim_file_name)
 
     def RunDEM(self, attempt):
 
@@ -64,7 +61,6 @@ class RadiusExpansionWithServoControlMethod(DynamicMethod):
     def Run(self, parameters, ini_path, run_path):
 
         self.Initialization(parameters, ini_path, run_path)
-        os.chdir(self.run_path)
         generation = self.parameters["random_particle_generation_parameters"]
         packing_num = self.parameters["packing_num"]
         attempt_densities = [
@@ -87,7 +83,13 @@ class RadiusExpansionWithServoControlMethod(DynamicMethod):
                 "A seed cannot be used when packing_num is greater than one."
             )
 
-        initial_case_creator = create_particles_inside_of_a_domain.CreateParticlesInsideOfADomain()
+        initial_case_creator = create_particles_inside_of_a_domain.CreateParticlesInsideOfADomain(
+            ParticleGenerationContext(
+                parameters=self.parameters,
+                project_root=Path(self.ini_path),
+                run_dir=Path(self.run_path),
+            )
+        )
         marker_path = Path(self.run_path) / "generation_marker.txt"
         marker_path.unlink(missing_ok=True)
 
