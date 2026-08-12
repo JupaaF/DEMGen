@@ -128,7 +128,7 @@ class ConstructiveMethod():
 
         seed_file_name_list = ['MaterialsDEM.json', 'ProjectParametersDEM.json', 'inletPGDEM_FEM_boundary.mdpa']
         for seed_file_name in seed_file_name_list:
-            seed_file_path_and_name = os.path.join(self.ini_path, 'utilities', 'rem_seed_files', seed_file_name)
+            seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities', 'rem_seed_files', seed_file_name)
             aim_file_path_and_name = os.path.join(aim_path, seed_file_name)
 
             if seed_file_name == 'ProjectParametersDEM.json':
@@ -165,7 +165,7 @@ class ConstructiveMethod():
             else:
                 shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
-        seed_file_path_and_name = os.path.join(self.ini_path, 'utilities', 'show_packing.py')
+        seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities', 'show_packing.py')
         aim_file_path_and_name = os.path.join(aim_path, 'show_packing.py')
         shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 

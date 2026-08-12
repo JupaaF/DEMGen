@@ -10,8 +10,8 @@ __license__     = "BSD 2-Clause License"
 #/////////////////////////////////////////////////
 
 import os
-from .dynamic_method import DynamicMethod
-from ..data_processing.pre_processing import create_particles_inside_of_a_domain
+from dynamic_methods.dynamic_method import DynamicMethod
+from src.data_processing.pre_processing import create_particles_inside_of_a_domain
 
 class IsotropicCompressionMethod(DynamicMethod):
 

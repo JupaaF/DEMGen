@@ -11,8 +11,8 @@ __license__     = "BSD 2-Clause License"
 
 import os
 
-from .dynamic_method import DynamicMethod
-from ..data_processing.pre_processing import create_fem_and_inlet_mesh_files
+from dynamic_methods.dynamic_method import DynamicMethod
+from data_processing.pre_processing import create_fem_and_inlet_mesh_files
 
 class GravitationalDepositionMethod(DynamicMethod):
 

@@ -12,7 +12,7 @@ __license__     = "BSD 2-Clause License"
 import os
 import subprocess
 
-from .radius_expansion_with_servo_control_method import RadiusExpansionWithServoControlMethod
+from dynamic_methods.radius_expansion_with_servo_control_method import RadiusExpansionWithServoControlMethod
 
 class ImprovedRadiusExpansionWithServoControlMethod(RadiusExpansionWithServoControlMethod):
     

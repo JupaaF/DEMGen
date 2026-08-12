@@ -218,11 +218,11 @@ class CreateFemAndInletMeshFiles():
             else:
                 shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
-        seed_file_path_and_name = os.path.join(self.ini_path, 'utilities', 'gravitational_deposition_method_run.py')
+        seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities', 'gravitational_deposition_method_run.py')
         aim_file_path_and_name = os.path.join(aim_path, 'gravitational_deposition_method_run.py')
         shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
-        seed_file_path_and_name = os.path.join(self.ini_path, 'utilities', 'show_packing.py')
+        seed_file_path_and_name = os.path.join(self.ini_path, 'src', 'utilities', 'show_packing.py')
         aim_file_path_and_name = os.path.join(aim_path, 'show_packing.py')
         shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
