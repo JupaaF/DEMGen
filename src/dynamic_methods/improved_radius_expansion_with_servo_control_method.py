@@ -17,10 +17,6 @@ class ImprovedRadiusExpansionWithServoControlMethod(RadiusExpansionWithServoCont
         super().__init__()
 
     def RunDEM(self, attempt):
-
-        if attempt.is_final_attempt:
-            script_name = "improved_radius_expansion_with_servo_control_method_run_final.py"
-        else:
-            script_name = "improved_radius_expansion_with_servo_control_method_run.py"
+        script_name = "improved_radius_expansion_with_servo_control_method_run.py"
 
         return self._run_case_script(script_name, attempt)

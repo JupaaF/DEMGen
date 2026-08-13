@@ -26,8 +26,6 @@ from data_processing.pre_processing.particle_case_request import (
 class Attempt:
     case_number: int
     packing_density: float
-    is_final_attempt: bool
-
 
 class RadiusExpansionWithServoControlMethod(DynamicMethod):
 
@@ -104,7 +102,6 @@ class RadiusExpansionWithServoControlMethod(DynamicMethod):
                 attempt = Attempt(
                     case_number=case_number,
                     packing_density=packing_density,
-                    is_final_attempt=attempt_index == len(attempt_densities) - 1,
                 )
                 with marker_path.open("a") as marker_file:
                     marker_file.write(
