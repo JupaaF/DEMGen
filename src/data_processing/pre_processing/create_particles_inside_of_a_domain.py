@@ -12,13 +12,14 @@ __license__     = "BSD 2-Clause License"
 import json
 import random
 import shutil
-import math
 from KratosMultiphysics import *
 from KratosMultiphysics.DEMApplication import *
 from data_processing.pre_processing.particle_case_request import (
     ParticleCaseRequest,
     ParticleGenerationContext,
 )
+from particles import ParticlePacking, SphericalParticle
+
 
 class CreateParticlesInsideOfADomain():
 
@@ -30,13 +31,14 @@ class CreateParticlesInsideOfADomain():
 
     def create_case(self, request: ParticleCaseRequest):
         self.Initialize(request)
-        self.CreateParticles()
-        self.WriteOutGIDData(request.output_file_name)
+        particles = self.CreateParticles()
+        particles.write_mdpa(self.case_path / request.output_file_name)
+        print(
+            "Successfully wrote file "
+            f"case_{self.case_number}-{request.output_file_name}!"
+        )
 
     def Initialize(self, request: ParticleCaseRequest):
-        self.particle_list = []
-        self.particle_list_side = []
-
         parameters = self.context.parameters
         self.rve_size = [
             parameters["domain_length_x"],
@@ -122,8 +124,10 @@ class CreateParticlesInsideOfADomain():
         aim_file_path_and_name = self.case_path / 'show_packing.py'
         shutil.copyfile(seed_file_path_and_name, aim_file_path_and_name)
 
-    def CreateParticles(self):
+    def CreateParticles(self) -> ParticlePacking:
 
+        particles = ParticlePacking()
+        side_particles: list[SphericalParticle] = []
         is_first_particle = True
         particle_cnt = 1
         particle_volume = 0
@@ -151,19 +155,6 @@ class CreateParticlesInsideOfADomain():
 
         while particle_volume < aim_volume:
 
-            p_parameters_dict = {
-                    "id" : 0,
-                    "p_x" : 0.0,
-                    "p_y" : 0.0,
-                    "p_z" : 0.0,
-                    "radius" : 0.0,
-                    "p_v_x" : 0.0,
-                    "p_v_y" : 0.0,
-                    "p_v_z" : 0.0,
-                    "p_ele_id": 0,
-                    "p_group_id": 0
-                    }
-
             r = self.Fast_Filling_Creator.GetRandomParticleRadius(creator_destructor)
             radius_max = self.parameters["MAXIMUM_RADIUS"].GetDouble() * self.parameters["random_variable_settings"]["radius_scale_multiplier"].GetDouble()
 
@@ -177,16 +168,16 @@ class CreateParticlesInsideOfADomain():
                         x = random.uniform(self.x_min + radius_max, self.x_max - radius_max)
                         y = random.uniform(self.y_min + radius_max, self.y_max - radius_max)
                         z = random.uniform(self.z_min + radius_max, self.z_max - radius_max)
-                    p_parameters_dict["id"] = particle_cnt
-                    p_parameters_dict["p_x"] = x
-                    p_parameters_dict["p_y"] = y
-                    p_parameters_dict["p_z"] = z
-                    p_parameters_dict["radius"] = r
-                    p_parameters_dict["p_ele_id"] = particle_cnt
-                    self.particle_list.append(p_parameters_dict)
+                    particle = SphericalParticle(
+                        node_id=particle_cnt,
+                        element_id=particle_cnt,
+                        position=(x, y, z),
+                        radius=r,
+                    )
+                    particles.add(particle)
                     print("Added particle number = {}".format(particle_cnt))
                     particle_cnt += 1
-                    particle_volume += 4/3 * math.pi * (r**3)
+                    particle_volume += particle.volume
                     is_first_particle = False
                 else:
                     IsOverlaped = True
@@ -196,8 +187,9 @@ class CreateParticlesInsideOfADomain():
                             self.x = random.uniform(self.x_min, self.x_max)
                             self.y = random.uniform(self.y_min, self.y_max)
                             self.z = random.uniform(self.z_min, self.z_max)
-                            for particle in self.particle_list:
-                                IsOverlaped = self.Fast_Filling_Creator.CheckHasIndentationOrNot(self.x, self.y, self.z, r, particle["p_x"], particle["p_y"], particle["p_z"], particle["radius"])
+                            for particle in particles:
+                                p_x, p_y, p_z = particle.position
+                                IsOverlaped = self.Fast_Filling_Creator.CheckHasIndentationOrNot(self.x, self.y, self.z, r, p_x, p_y, p_z, particle.radius)
                                 if IsOverlaped:
                                     break
 
@@ -213,8 +205,9 @@ class CreateParticlesInsideOfADomain():
                             z_minus = self.z - real_RVE_z_length
 
                             if not IsOverlaped:
-                                for particle in self.particle_list_side:
-                                    p_x, p_y, p_z, p_r = particle["p_x"], particle["p_y"], particle["p_z"], particle["radius"]
+                                for particle in side_particles:
+                                    p_x, p_y, p_z = particle.position
+                                    p_r = particle.radius
                                     IsOverlaped = self.Fast_Filling_Creator.CheckHasIndentationOrNot(x_plus, self.y, self.z, r, p_x, p_y, p_z, p_r)
                                     if IsOverlaped:
                                         break
@@ -231,8 +224,9 @@ class CreateParticlesInsideOfADomain():
                                     if IsOverlaped:
                                         break
                             if not IsOverlaped:
-                                for particle in self.particle_list_side:
-                                    p_x, p_y, p_z, p_r = particle["p_x"], particle["p_y"], particle["p_z"], particle["radius"]
+                                for particle in side_particles:
+                                    p_x, p_y, p_z = particle.position
+                                    p_r = particle.radius
                                     IsOverlaped = self.Fast_Filling_Creator.CheckHasIndentationOrNot(x_minus, self.y, self.z, r, p_x, p_y, p_z, p_r)
                                     if IsOverlaped:
                                         break
@@ -250,8 +244,9 @@ class CreateParticlesInsideOfADomain():
                                         break
 
                             if not IsOverlaped:
-                                for particle in self.particle_list_side:
-                                    p_x, p_y, p_z, p_r = particle["p_x"], particle["p_y"], particle["p_z"], particle["radius"]
+                                for particle in side_particles:
+                                    p_x, p_y, p_z = particle.position
+                                    p_r = particle.radius
                                     IsOverlaped = self.Fast_Filling_Creator.CheckHasIndentationOrNot(self.x, y_minus, self.z, r, p_x, p_y, p_z, p_r)
                                     if IsOverlaped:
                                         break
@@ -268,8 +263,9 @@ class CreateParticlesInsideOfADomain():
                                     if IsOverlaped:
                                         break
                             if not IsOverlaped:
-                                for particle in self.particle_list_side:
-                                    p_x, p_y, p_z, p_r = particle["p_x"], particle["p_y"], particle["p_z"], particle["radius"]
+                                for particle in side_particles:
+                                    p_x, p_y, p_z = particle.position
+                                    p_r = particle.radius
                                     IsOverlaped = self.Fast_Filling_Creator.CheckHasIndentationOrNot(self.x, y_plus, self.z, r, p_x, p_y, p_z, p_r)
                                     if IsOverlaped:
                                         break
@@ -287,8 +283,9 @@ class CreateParticlesInsideOfADomain():
                                         break
 
                             if not IsOverlaped:
-                                for particle in self.particle_list_side:
-                                    p_x, p_y, p_z, p_r = particle["p_x"], particle["p_y"], particle["p_z"], particle["radius"]
+                                for particle in side_particles:
+                                    p_x, p_y, p_z = particle.position
+                                    p_r = particle.radius
                                     IsOverlaped = self.Fast_Filling_Creator.CheckHasIndentationOrNot(self.x, self.y, z_plus, r, p_x, p_y, p_z, p_r)
                                     if IsOverlaped:
                                         break
@@ -305,8 +302,9 @@ class CreateParticlesInsideOfADomain():
                                     if IsOverlaped:
                                         break
                             if not IsOverlaped:
-                                for particle in self.particle_list_side:
-                                    p_x, p_y, p_z, p_r = particle["p_x"], particle["p_y"], particle["p_z"], particle["radius"]
+                                for particle in side_particles:
+                                    p_x, p_y, p_z = particle.position
+                                    p_r = particle.radius
                                     IsOverlaped = self.Fast_Filling_Creator.CheckHasIndentationOrNot(self.x, self.y, z_minus, r, p_x, p_y, p_z, p_r)
                                     if IsOverlaped:
                                         break
@@ -326,8 +324,9 @@ class CreateParticlesInsideOfADomain():
                             self.x = random.uniform(self.x_min + radius_max, self.x_max - radius_max)
                             self.y = random.uniform(self.y_min + radius_max, self.y_max - radius_max)
                             self.z = random.uniform(self.z_min + radius_max, self.z_max - radius_max)
-                            for particle in self.particle_list:
-                                IsOverlaped = self.Fast_Filling_Creator.CheckHasIndentationOrNot(self.x, self.y, self.z, r, particle["p_x"], particle["p_y"], particle["p_z"], particle["radius"])
+                            for particle in particles:
+                                p_x, p_y, p_z = particle.position
+                                IsOverlaped = self.Fast_Filling_Creator.CheckHasIndentationOrNot(self.x, self.y, self.z, r, p_x, p_y, p_z, particle.radius)
                                 if IsOverlaped:
                                     break
                         loop_cnt += 1
@@ -335,29 +334,29 @@ class CreateParticlesInsideOfADomain():
                             print("Too much loop for one particle!")
                             exit(0)
 
-                    p_parameters_dict["id"] = particle_cnt
-                    p_parameters_dict["p_x"] = self.x
-                    p_parameters_dict["p_y"] = self.y
-                    p_parameters_dict["p_z"] = self.z
-                    p_parameters_dict["radius"] = r
-                    p_parameters_dict["p_ele_id"] = particle_cnt
-                    self.particle_list.append(p_parameters_dict)
+                    particle = SphericalParticle(
+                        node_id=particle_cnt,
+                        element_id=particle_cnt,
+                        position=(self.x, self.y, self.z),
+                        radius=r,
+                    )
+                    particles.add(particle)
                     if self.parameters_all["periodic_boundary_option"].GetBool():
                         if self.x <= self.x_min + radius_max * 2:
-                            self.particle_list_side.append(p_parameters_dict)
+                            side_particles.append(particle)
                         elif self.x >= self.x_max - radius_max * 2:
-                            self.particle_list_side.append(p_parameters_dict)
+                            side_particles.append(particle)
                         elif self.y <= self.y_min + radius_max * 2:
-                            self.particle_list_side.append(p_parameters_dict)
+                            side_particles.append(particle)
                         elif self.y >= self.y_max - radius_max * 2:
-                            self.particle_list_side.append(p_parameters_dict)
+                            side_particles.append(particle)
                         elif self.z <= self.z_min + radius_max * 2:
-                            self.particle_list_side.append(p_parameters_dict)
+                            side_particles.append(particle)
                         elif self.z >= self.z_max - radius_max * 2:
-                            self.particle_list_side.append(p_parameters_dict)
+                            side_particles.append(particle)
                     print("Added particle number = {}".format(particle_cnt))
                     particle_cnt += 1
-                    particle_volume += 4/3 * math.pi * (r**3)
+                    particle_volume += particle.volume
 
             else: # if not check_intial_overlap_option
 
@@ -370,75 +369,15 @@ class CreateParticlesInsideOfADomain():
                     y = random.uniform(self.y_min + radius_max, self.y_max - radius_max)
                     z = random.uniform(self.z_min + radius_max, self.z_max - radius_max)
 
-                p_parameters_dict["id"] = particle_cnt
-                p_parameters_dict["p_x"] = x
-                p_parameters_dict["p_y"] = y
-                p_parameters_dict["p_z"] = z
-                p_parameters_dict["radius"] = r
-                p_parameters_dict["p_ele_id"] = particle_cnt
-                self.particle_list.append(p_parameters_dict)
+                particle = SphericalParticle(
+                    node_id=particle_cnt,
+                    element_id=particle_cnt,
+                    position=(x, y, z),
+                    radius=r,
+                )
+                particles.add(particle)
                 print("Added particle number = {}".format(particle_cnt))
                 particle_cnt += 1
-                particle_volume += 4/3 * math.pi * (r**3)
+                particle_volume += particle.volume
 
-    def WriteOutGIDData(self, aim_file_name):
-
-        aim_path_and_name = self.case_path / aim_file_name
-
-        with aim_path_and_name.open('w') as f:
-            # write the particle information
-            f.write("Begin ModelPartData \n //  VARIABLE_NAME value \n End ModelPartData \n \n Begin Properties 0 \n End Properties \n \n")
-            f.write("Begin Nodes\n")
-            for p_pram_dict in self.particle_list:
-                f.write(str(p_pram_dict["id"]) + ' ' + str(p_pram_dict["p_x"]) + ' ' + str(p_pram_dict["p_y"]) + ' ' + str(p_pram_dict["p_z"]) + '\n')
-            f.write("End Nodes \n \n")
-
-            f.write("Begin Elements SphericParticle3D// GUI group identifier: Body \n")
-            for p_pram_dict in self.particle_list:
-                f.write(str(p_pram_dict["p_ele_id"]) + ' ' + ' 0 ' + str(p_pram_dict["id"]) + '\n')
-            f.write("End Elements \n \n")
-
-            f.write("Begin NodalData RADIUS // GUI group identifier: Body \n")
-            for p_pram_dict in self.particle_list:
-                f.write(str(p_pram_dict["id"]) + ' ' + ' 0 ' + str(p_pram_dict["radius"]) + '\n')
-            f.write("End NodalData \n \n")
-
-            ''' only works for continuum DEM calculation
-            f.write("Begin NodalData COHESIVE_GROUP // GUI group identifier: Body \n")
-            for p_pram_dict in self.p_pram_list:
-                f.write(str(p_pram_dict["id"]) + ' ' + ' 0 ' + " 1 " + '\n')
-            f.write("End NodalData \n \n")
-
-            f.write("Begin NodalData SKIN_SPHERE \n End NodalData \n \n")
-            '''
-
-            f.write("Begin SubModelPart DEMParts_Body // Group Body // Subtree DEMParts \n Begin SubModelPartNodes \n")
-            for p_pram_dict in self.particle_list:
-                if p_pram_dict["p_group_id"] == 0:
-                    f.write(str(p_pram_dict["id"]) + '\n')
-            f.write("End SubModelPartNodes \n Begin SubModelPartElements \n ")
-            for p_pram_dict in self.particle_list:
-                if p_pram_dict["p_group_id"] == 0:
-                    f.write(str(p_pram_dict["p_ele_id"]) + '\n')
-            f.write("End SubModelPartElements \n")
-            f.write("Begin SubModelPartConditions \n End SubModelPartConditions \n End SubModelPart \n \n")
-
-            #write out joint group
-            joint_exist = False
-            for p_pram_dict in self.particle_list:
-                if p_pram_dict["p_group_id"] == 1:
-                    joint_exist = True
-
-            if joint_exist:
-                f.write("Begin SubModelPart DEMParts_Joint // Group Joint // Subtree DEMParts \n Begin SubModelPartNodes \n")
-                for p_pram_dict in self.particle_list:
-                    if p_pram_dict["p_group_id"] == 1:
-                        f.write(str(p_pram_dict["id"]) + '\n')
-                f.write("End SubModelPartNodes \n Begin SubModelPartElements \n ")
-                for p_pram_dict in self.particle_list:
-                    if p_pram_dict["p_group_id"] == 1:
-                        f.write(str(p_pram_dict["p_ele_id"]) + '\n')
-                f.write("End SubModelPartElements \n")
-                f.write("Begin SubModelPartConditions \n End SubModelPartConditions \n End SubModelPart \n")
-
-        print("Successfully write out file case_{}-{}!".format(self.case_number, aim_file_name))
+        return particles

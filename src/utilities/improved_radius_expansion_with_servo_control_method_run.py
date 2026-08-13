@@ -17,6 +17,10 @@ import math
 import numpy as np
 import pathlib
 
+project_src = pathlib.Path(__file__).resolve().parents[1]
+if str(project_src) not in sys.path:
+    sys.path.insert(0, str(project_src))
+
 import KratosMultiphysics
 from KratosMultiphysics import *
 from KratosMultiphysics.DEMApplication import *
@@ -24,6 +28,7 @@ from KratosMultiphysics.DEMApplication.DEM_analysis_stage import DEMAnalysisStag
 from KratosMultiphysics import Logger
 
 from demgen_case_parameters import load_case_parameters
+from particles import ParticlePacking, SphericalParticle
 
 if os.path.exists("normalized_kinematic_energy.txt"):
     os.remove("normalized_kinematic_energy.txt")
@@ -41,91 +46,26 @@ if os.path.exists("granular_temperature_0.txt"):
     os.remove("granular_temperature_0.txt")
 '''
 
-def GetParticleDataFromMdpa(aim_mdpa_file_name):
-
-    p_id = 1
-    p_record_nodes = False
-    p_record_elements = False
-    p_record_radius = False
-    p_pram_list = []
-
-    if os.path.isfile(aim_mdpa_file_name):
-
-        with open(aim_mdpa_file_name, 'r') as mdpa_data:
-
-            for line in mdpa_data:
-
-                p_pram_dict = {
-                "id" : 0,
-                "p_x" : 0.0,
-                "p_y" : 0.0,
-                "p_z" : 0.0,
-                "radius" : 0.0,
-                "p_v_x" : 0.0,
-                "p_v_y" : 0.0,
-                "p_v_z" : 0.0,
-                "p_ele_id": 0,
-                "p_group_id": 0
-                }
-
-                values = [str(s) for s in line.split()]
-
-                if len(values) > 1:
-                    if values[0] == 'Begin' and values[1] == 'Nodes':
-                        p_record_nodes = True
-                        continue
-                    elif values[0] == 'End' and values[1] == 'Nodes':
-                        p_record_nodes = False
-
-                    if values[0] == 'Begin' and values[1] == 'Elements':
-                        p_record_elements = True
-                        continue
-                    elif values[0] == 'End' and values[1] == 'Elements':
-                        p_record_elements = False
-
-                if len(values) > 2:
-                    if values[0] == 'Begin' and values[2] == 'RADIUS':
-                        p_record_radius = True
-                        continue
-                if len(values) > 1:
-                    if values[0] == 'End' and values[1] == 'NodalData' and p_record_radius == True:
-                        p_record_radius = False
-
-                if p_record_nodes:
-                    p_pram_dict["id"] = int(values[0])
-                    p_pram_dict["p_x"] = float(values[1])
-                    p_pram_dict["p_y"] = float(values[2])
-                    p_pram_dict["p_z"] = float(values[3])
-
-                if p_record_elements:
-                    #only modify the values, not add new one
-                    temp_p_pram_dict = next(old_p_pram_dict for old_p_pram_dict in p_pram_list if old_p_pram_dict['id'] == int(values[2]))
-                    temp_p_pram_dict["p_ele_id"] = int(values[0])
-
-                if p_record_radius:
-                    #only modify the values, not add new one
-                    temp_p_pram_dict = next(old_p_pram_dict for old_p_pram_dict in p_pram_list if old_p_pram_dict['id'] == int(values[0]))
-                    temp_p_pram_dict["radius"] = float(values[2])
-
-                if not (p_record_elements and p_record_radius):
-                    if p_record_nodes:
-                        p_pram_list.append(p_pram_dict)
-                        p_id = p_id + 1
-
-    p_pram_list = sorted(p_pram_list, key=lambda d: d['id'])
-
-    return p_pram_list
-
 class DEMAnalysisStageWithFlush(DEMAnalysisStage):
 
-    def __init__(self, model, project_parameters, radius_multiplier, ini_p_pram_list, case_parameters, flush_frequency=10.0):
+    def __init__(
+        self,
+        model,
+        project_parameters,
+        radius_multiplier,
+        initial_packing: ParticlePacking,
+        case_parameters,
+        flush_frequency=10.0,
+    ):
         super().__init__(model, project_parameters)
         self.flush_frequency = flush_frequency
         self.last_flush = time.time()
         self.parameters = parameters
         self.radius_multiplier = radius_multiplier
         self.normalized_kinematic_energy = 1e10
-        self.ini_p_pram_list = ini_p_pram_list
+        self.initial_radii = {
+            particle.node_id: particle.radius for particle in initial_packing
+        }
         self.case_parameters = case_parameters
         self.start_reset_velocity = False
         self.second_stage_flag = False
@@ -410,43 +350,42 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
         else:
             aim_path_and_name = os.path.join(os.getcwd(), output_file_name)
 
-        with open(aim_path_and_name,'w') as f:
-            # write the particle information
-            f.write("Begin ModelPartData \n //  VARIABLE_NAME value \n End ModelPartData \n \n Begin Properties 0 \n End Properties \n \n")
-            f.write("Begin Nodes\n")
-            for node in self.spheres_model_part.Nodes:
-                f.write(str(node.Id) + ' ' + str(node.X) + ' ' + str(node.Y) + ' ' + str(node.Z) + '\n')
-            f.write("End Nodes \n \n")
+        element_ids_by_node = {}
+        for element in self.spheres_model_part.Elements:
+            node_id = element.GetNode(0).Id
+            if node_id in element_ids_by_node:
+                raise ValueError(f"Multiple elements reference particle node {node_id}.")
+            element_ids_by_node[node_id] = element.Id
 
-            f.write("Begin Elements SphericParticle3D// GUI group identifier: Body \n")
-            for element in self.spheres_model_part.Elements:
-                f.write(str(element.Id) + ' ' + ' 0 ' + str(element.GetNode(0).Id) + '\n')
-            f.write("End Elements \n \n")
+        particles = ParticlePacking()
+        for node in self.spheres_model_part.Nodes:
+            try:
+                element_id = element_ids_by_node[node.Id]
+                initial_radius = self.initial_radii[node.Id]
+            except KeyError as error:
+                raise ValueError(
+                    f"Incomplete IRES particle data for node {node.Id}."
+                ) from error
 
-            f.write("Begin NodalData RADIUS // GUI group identifier: Body \n")
-            for p_pram_dict in self.ini_p_pram_list:
-                f.write(str(p_pram_dict["id"]) + ' ' + ' 0 ' + str(p_pram_dict["radius"] * self.radius_multiplier) + '\n')
-            f.write("End NodalData \n \n")
+            particles.add(
+                SphericalParticle(
+                    node_id=node.Id,
+                    element_id=element_id,
+                    position=(node.X, node.Y, node.Z),
+                    radius=initial_radius * self.radius_multiplier,
+                )
+            )
 
-            ''' only works for continuum DEM calculation
-            f.write("Begin NodalData COHESIVE_GROUP // GUI group identifier: Body \n")
-            for p_pram_dict in p_pram_list:
-                f.write(str(p_pram_dict["id"]) + ' ' + ' 0 ' + " 1 " + '\n')
-            f.write("End NodalData \n \n")
+        unexpected_element_nodes = set(element_ids_by_node) - {
+            particle.node_id for particle in particles
+        }
+        if unexpected_element_nodes:
+            raise ValueError(
+                "Elements reference missing particle nodes: "
+                f"{sorted(unexpected_element_nodes)}."
+            )
 
-            f.write("Begin NodalData SKIN_SPHERE \n End NodalData \n \n")
-            '''
-
-            f.write("Begin SubModelPart DEMParts_Body // Group Body // Subtree DEMParts \n Begin SubModelPartNodes \n")
-            for node in self.spheres_model_part.Nodes:
-                f.write(str(node.Id) + '\n')
-            f.write("End SubModelPartNodes \n Begin SubModelPartElements \n ")
-            for element in self.spheres_model_part.Elements:
-                f.write(str(element.Id) + '\n')
-            f.write("End SubModelPartElements \n")
-            f.write("Begin SubModelPartConditions \n End SubModelPartConditions \n End SubModelPart \n \n")
-
-            f.close()
+        particles.write_mdpa(aim_path_and_name)
 
         print("Successfully write out GID DEM.mdpa file!")
 
@@ -529,7 +468,7 @@ if __name__ == "__main__":
 
     shutil.copyfile('inletPGDEM_ini.mdpa', 'inletPGDEM.mdpa')
 
-    ini_p_pram_list = GetParticleDataFromMdpa('inletPGDEM_ini.mdpa')
+    initial_packing = ParticlePacking.from_mdpa('inletPGDEM_ini.mdpa')
 
     while radius_multiplier < (max_radius_multiplier + 0.2):
         if os.path.exists('inletPG_Post_Files'):
@@ -538,7 +477,7 @@ if __name__ == "__main__":
             parameters = KratosMultiphysics.Parameters(parameter_file.read())
 
         global_model = KratosMultiphysics.Model()
-        MyDemCase = DEMAnalysisStageWithFlush(global_model, parameters, radius_multiplier, ini_p_pram_list, case_parameters)
+        MyDemCase = DEMAnalysisStageWithFlush(global_model, parameters, radius_multiplier, initial_packing, case_parameters)
         MyDemCase.Initialize()
         MyDemCase.RunSolutionLoop()
         NormalizedKineticEnergy = MyDemCase.PassNormalizedKineticEnergy()
@@ -558,7 +497,7 @@ if __name__ == "__main__":
 
     parameters["FinalTime"].SetDouble(10)
     global_model = KratosMultiphysics.Model()
-    MyDemCase = DEMAnalysisStageWithFlush(global_model, parameters, radius_multiplier, ini_p_pram_list, case_parameters)
+    MyDemCase = DEMAnalysisStageWithFlush(global_model, parameters, radius_multiplier, initial_packing, case_parameters)
     MyDemCase.Initialize()
     MyDemCase.SetResetStart()
     MyDemCase.RunSolutionLoop()
