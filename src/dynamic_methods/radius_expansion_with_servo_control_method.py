@@ -67,10 +67,7 @@ class RadiusExpansionWithServoControlMethod(DynamicMethod):
         self.Initialization(parameters, ini_path, run_path)
         generation = self.parameters["random_particle_generation_parameters"]
         packing_num = self.parameters["packing_num"]
-        attempt_densities = [
-            generation["target_packing_density"] - delta
-            for delta in generation["packing_density_delta_list"]
-        ]
+        attempt_densities = self.GetAttemptDensities(generation)
 
         if not attempt_densities:
             raise ValueError("packing_density_delta_list must contain at least one value.")
@@ -110,3 +107,9 @@ class RadiusExpansionWithServoControlMethod(DynamicMethod):
                 self.CreateInitialCases(attempt, initial_case_creator)
                 if self.RunDEM(attempt):
                     break
+
+    def GetAttemptDensities(self, generation):
+        return [
+            generation["target_packing_density"] - delta
+            for delta in generation["packing_density_delta_list"]
+        ]

@@ -35,6 +35,11 @@
         "packing_density_delta_list" : [2.5e-4, 5e-4, 1e-3, 2.5e-3, 5e-3, 1e-2],
         "domain_scale_multiplier": 1.0
     },
+    "curve_generation": {
+        "mode": "single_point",
+        "target_density": 0.64,
+        "target_stress": 5000.0
+    },
     "packing_charcterization_option" : true,
     "regular_shape_option"           : true,
     "packing_charcterization_setting": {

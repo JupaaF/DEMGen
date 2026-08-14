@@ -29,6 +29,12 @@ from KratosMultiphysics import Logger
 
 from demgen_case_parameters import load_case_parameters
 from particles import ParticlePacking, SphericalParticle
+from curve_generation import (
+    CurveGenerationSettings,
+    DENSITY_SWEEP,
+    SINGLE_POINT,
+    STRESS_SWEEP,
+)
 
 if os.path.exists("normalized_kinematic_energy.txt"):
     os.remove("normalized_kinematic_energy.txt")
@@ -40,6 +46,12 @@ if os.path.exists("stress_tensor_1.txt"):
     os.remove("stress_tensor_1.txt")
 if os.path.exists("inletPGDEM_post_1.mdpa"):
     os.remove("inletPGDEM_post_1.mdpa")
+if os.path.exists("stress_tensor_save.txt"):
+    os.remove("stress_tensor_save.txt")
+if os.path.exists("target_stress.txt"):
+    os.remove("target_stress.txt")
+if os.path.exists("success.txt"):
+    os.remove("success.txt")
 ''' 
 TODO: granular temperature should be made optional
 if os.path.exists("granular_temperature_0.txt"):
@@ -86,6 +98,43 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
         self.minimum_mean_confining_stress = self.case_parameters["minimum_mean_stress"]
         self.ZeroFrictionPhase = False
         self.zero_friction_phase_counter = 0
+        self.zero_friction_phase_counter_target = 100
+        self.curve_generation = self._GetCurveGenerationSettings()
+        self.target_packing_density = self.curve_generation.initial_density
+        self.final_target_packing_density = self.curve_generation.final_density
+        self.stress_targets = self.curve_generation.stress_targets
+        self.stress_target_index = 0
+        self.curve_checkpoint_index = 0
+        self.density_sweep_phase = "stress_ramp"
+        self._SetTargetMeanStress(self.stress_targets[0])
+
+    def _GetCurveGenerationSettings(self):
+        raw_settings = self.case_parameters.get("curve_generation")
+        if raw_settings is not None:
+            return CurveGenerationSettings(**raw_settings)
+
+        target_stresses = self.parameters["BoundingBoxServoLoadingSettings"][
+            "BoundingBoxServoLoadingStress"
+        ].GetVector()
+        target_stress = max(
+            sum(target_stresses) / len(target_stresses),
+            self.minimum_mean_confining_stress,
+        )
+        return CurveGenerationSettings(
+            mode=SINGLE_POINT,
+            initial_density=self.target_packing_density,
+            final_density=self.target_packing_density,
+            initial_stress=target_stress,
+            final_stress=target_stress,
+            number_of_steps=1,
+        )
+
+    def _SetTargetMeanStress(self, target_stress):
+        self.target_mean_stress = target_stress
+        self.parameters["BoundingBoxServoLoadingSettings"][
+            "BoundingBoxServoLoadingStress"
+        ].SetVector([target_stress, target_stress, target_stress])
+        self.measured_stress_list.clear()
 
     def ReadMaterialsFile(self):
         adapted_to_current_os_relative_path = pathlib.Path(self.DEM_parameters["solver_settings"]["material_import_settings"]["materials_filename"].GetString())
@@ -171,7 +220,7 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
         if self.DEM_parameters["ContactMeshOption"].GetBool():
             self._GetSolver().PrepareContactElementsForPrinting()
 
-        if self.ZeroFrictionPhase and self.zero_friction_phase_counter == 100:
+        if self.ZeroFrictionPhase and self.zero_friction_phase_counter == self.zero_friction_phase_counter_target:
             self.zero_friction_phase_counter = 0
             for properties in self.spheres_model_part.Properties:
                 for subproperties in properties.GetSubProperties():
@@ -201,52 +250,38 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
                 file.write(str(self.time) + ' ' + str(self.normalized_kinematic_energy) + ' ' + str(measured_unbalanced_force) + '\n')
 
 
-            stress_tensor = self.MeasureSphereForGettingGlobalStressTensor()
-            mean_stress = (stress_tensor[0][0] + stress_tensor[1][1] + stress_tensor[2][2])/3
-
-            mcn = self.MeasureGlobalMeanCoordinationNumber()
-
-            if self.is_start_servo_control:
-                with open("stress_tensor_1.txt", 'a') as file:
-                    file.write(str(self.time) + ' ' + str(mean_stress) + ' ' + str(self.final_packing_density) + ' ' \
-                                + str(stress_tensor[0][0]) + ' ' + str(stress_tensor[1][1]) + ' ' + str(stress_tensor[2][2]) + ' ' + str(mcn) +'\n')
-            else:
-                with open("stress_tensor_0.txt", 'a') as file:
-                    file.write(str(self.time) + ' ' + str(mean_stress) + ' ' + str(self.final_packing_density) + ' ' \
-                                + str(stress_tensor[0][0]) + ' ' + str(stress_tensor[1][1]) + ' ' + str(stress_tensor[2][2]) + ' ' + str(mcn) +'\n')
-
-                #TODO: this should be optional, not always output
-                '''
-                granular_temperature, max_granular_temperature = self.GetGranularTemperature()
-                with open("granular_temperature_0.txt", 'a') as file:
-                    file.write(str(self.time) + ' ' + str(granular_temperature) + ' ' + str(max_granular_temperature) + '\n')
-                '''
-
+            packing_state = self._MeasurePackingState()
+            mean_stress = packing_state["mean_stress"]
+            self._WritePackingState(
+                "stress_tensor_1.txt" if self.is_start_servo_control else "stress_tensor_0.txt",
+                packing_state,
+            )
             self.measured_stress_list.append(mean_stress)
-
-            target_normal_stress = self.parameters["BoundingBoxServoLoadingSettings"]["BoundingBoxServoLoadingStress"].GetVector()
-            target_mean_stress = (target_normal_stress[0] + target_normal_stress[1] + target_normal_stress[2]) / 3
-
-            if target_mean_stress < self.minimum_mean_confining_stress:
-                target_mean_stress = self.minimum_mean_confining_stress
+            with open("target_stress.txt", "a") as target_stress_file:
+                target_stress_file.write(f"{self.time} {self.target_mean_stress}\n")
 
             if not self.is_start_servo_control:
 
                 if self.start_reset_velocity:
 
-                    if (self.final_packing_density - self.target_packing_density) > self.tolerance_of_packing_density:
+                    if (
+                        self.curve_generation.mode == SINGLE_POINT
+                        and (self.final_packing_density - self.target_packing_density)
+                        > self.tolerance_of_packing_density
+                    ):
                         print("The packing density is higher than the target packing density, the simulation will be terminated.")
                         time.sleep(5)
                         exit(0)
 
-                    if mean_stress < target_mean_stress: # (target stress, packing density) in the accessiable region
+                    if mean_stress < self.target_mean_stress: # (target stress, packing density) in the accessiable region
                         for properties in self.spheres_model_part.Properties:
                             for subproperties in properties.GetSubProperties():
                                 subproperties[STATIC_FRICTION] = self.initial_friction_coefficient
                                 subproperties[DYNAMIC_FRICTION] = self.initial_friction_coefficient
-                        if measured_unbalanced_force < self.tolerance_of_unbalanced_force or mean_stress < self.tolerance_of_target_mean_stress:
+                        if measured_unbalanced_force < self.tolerance_of_unbalanced_force or abs(mean_stress - self.target_mean_stress) < self.tolerance_of_target_mean_stress:
                             self.second_stage_flag = True
-                            self.WriteOutMdpaFileOfParticles("inletPGDEM.mdpa")
+                            if self.curve_generation.mode == SINGLE_POINT:
+                                self.WriteOutMdpaFileOfParticles("inletPGDEM.mdpa")
                             self.PrintResultsForGid(self.time)
                             self.is_start_servo_control = True
                             self.parameters["BoundingBoxMoveOption"].SetBool(True)
@@ -259,9 +294,10 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
                         #exit(0)
                     elif measured_unbalanced_force < self.tolerance_of_unbalanced_force: # (target stress, packing density) in the inaccessiable region (2)
                         self.second_stage_flag = True
-                        self.WriteOutMdpaFileOfParticles("inletPGDEM.mdpa")
+                        if self.curve_generation.mode == SINGLE_POINT:
+                            self.WriteOutMdpaFileOfParticles("inletPGDEM.mdpa")
                         self.PrintResultsForGid(self.time)
-                        if mean_stress > target_mean_stress:
+                        if mean_stress > self.target_mean_stress:
                             self.is_in_inaccessibale_region2 = True
                         self.is_start_servo_control = True
                         self.parameters["BoundingBoxMoveOption"].SetBool(True)
@@ -279,35 +315,183 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
 
                 mad = 0.0
                 if len(self.measured_stress_list) > 5:
-                    mad = np.mean([abs(x - target_mean_stress) for x in self.measured_stress_list[-5:]])
+                    mad = np.mean([abs(x - self.target_mean_stress) for x in self.measured_stress_list[-5:]])
 
                 mad_threshold = self.tolerance_of_target_mean_stress
                 if mad < mad_threshold and len(self.measured_stress_list) > 5:
                     if measured_unbalanced_force < self.tolerance_of_unbalanced_force:
-                        print("The stress is stable, and the simulation reaches to the 2nd phase.")
-                        if self.is_in_inaccessibale_region2:
-                            self.WriteOutMdpaFileOfParticles("inletPGDEM.mdpa")
-                            self.copy_files_and_run_show_results()
-                            exit(0)
-                        else:
-                            if (self.final_packing_density - self.target_packing_density) > self.tolerance_of_packing_density:
-                                print("2 stage: The packing density is higher than the target packing density, the simulation will be terminated.")
-                                time.sleep(5)
-                                exit(0)
-                            elif (self.target_packing_density - self.final_packing_density) > self.tolerance_of_packing_density:
-                                for properties in self.spheres_model_part.Properties:
-                                    for subproperties in properties.GetSubProperties():
-                                        subproperties[STATIC_FRICTION] = 0.0
-                                        subproperties[DYNAMIC_FRICTION] = 0.0
-                                self.ZeroFrictionPhase = True
-                                self.zero_friction_phase_counter = 0
-                            else:
-                                self.WriteOutMdpaFileOfParticles("inletPGDEM.mdpa")
-                                with open("success.txt", 'w') as file:
-                                    file.write("Simulation completed successfully.")
-                                self.copy_files_and_run_show_results()
-                                exit(0)
+                        self._HandleStableServoState(packing_state)
         self.final_check_counter += 1
+
+    def _MeasurePackingState(self):
+        stress_tensor = self.MeasureSphereForGettingGlobalStressTensor()
+        mean_stress = sum(stress_tensor[index][index] for index in range(3)) / 3
+
+        stress_tensor_tangential = self.MeasureGlobalStressTensorTangential()
+        mean_stress_tangential = sum(
+            stress_tensor_tangential[index][index] for index in range(3)
+        ) / 3
+        tangential_square_sum = sum(
+            stress_tensor_tangential[row][column] ** 2
+            for row in range(3)
+            for column in range(3)
+        )
+        shear_stress = np.sqrt(1.5 * tangential_square_sum)
+
+        measured_conductivity, measured_conductivity_trace = (
+            self.MeasureGlobalConductivityTensor()
+        )
+        _, second_invariant, measured_fabric_tensor = self.MeasureGlobalFabricTensor()
+
+        return {
+            "time": self.time,
+            "mean_stress": mean_stress,
+            "packing_density": self.final_packing_density,
+            "stress_tensor": stress_tensor,
+            "mean_coordination_number": self.MeasureGlobalMeanCoordinationNumber(),
+            "conductivity_tensor": measured_conductivity,
+            "conductivity_trace": measured_conductivity_trace,
+            "mean_stress_tangential": mean_stress_tangential,
+            "stress_tensor_tangential": stress_tensor_tangential,
+            "shear_stress": shear_stress,
+            "fabric_tensor": measured_fabric_tensor,
+            "fabric_second_invariant": second_invariant,
+        }
+
+    def _WritePackingState(self, output_file_name, packing_state):
+        values = [
+            packing_state["time"],
+            packing_state["mean_stress"],
+            packing_state["packing_density"],
+            *self._FlattenTensor(packing_state["stress_tensor"]),
+            packing_state["mean_coordination_number"],
+            *self._FlattenTensor(packing_state["conductivity_tensor"]),
+            packing_state["conductivity_trace"],
+            packing_state["mean_stress_tangential"],
+            *self._FlattenTensor(packing_state["stress_tensor_tangential"]),
+            packing_state["shear_stress"],
+            *self._FlattenTensor(packing_state["fabric_tensor"]),
+            packing_state["fabric_second_invariant"],
+        ]
+        with open(output_file_name, "a") as output_file:
+            output_file.write(" ".join(str(value) for value in values) + "\n")
+
+    @staticmethod
+    def _FlattenTensor(tensor):
+        return [tensor[row][column] for row in range(3) for column in range(3)]
+
+    def _HandleStableServoState(self, packing_state):
+        mode = self.curve_generation.mode
+        if mode == SINGLE_POINT:
+            self._HandleSinglePoint(packing_state)
+        elif mode == STRESS_SWEEP:
+            self._HandleStressSweep(packing_state)
+        elif mode == DENSITY_SWEEP:
+            self._HandleDensitySweep(packing_state)
+        else:
+            raise RuntimeError(f"Unsupported curve generation mode: {mode}")
+
+    def _HandleSinglePoint(self, packing_state):
+        print("The stress is stable; checking the target packing density.")
+        if self.is_in_inaccessibale_region2:
+            self.WriteOutMdpaFileOfParticles("inletPGDEM.mdpa")
+            self.copy_files_and_run_show_results()
+            exit(0)
+
+        density_error = self.target_packing_density - self.final_packing_density
+        if density_error < -self.tolerance_of_packing_density:
+            print(
+                "The packing density is higher than the target packing density; "
+                "the attempt will be terminated."
+            )
+            time.sleep(5)
+            exit(0)
+        if density_error > self.tolerance_of_packing_density:
+            self._StartZeroFrictionPhase()
+            return
+
+        self._SaveCurveCheckpoint(packing_state)
+        self._CompleteSimulation()
+
+    def _HandleStressSweep(self, packing_state):
+        self._SaveCurveCheckpoint(packing_state)
+        if self._AdvanceStressTarget():
+            return
+        self._CompleteSimulation()
+
+    def _HandleDensitySweep(self, packing_state):
+        if self.density_sweep_phase == "stress_ramp":
+            if self._AdvanceStressTarget():
+                return
+
+            self.density_sweep_phase = "density_increase"
+            self.target_packing_density = self.final_target_packing_density
+            self.zero_friction_phase_counter_target = 1000
+            # This is the first point on the vertical line, not a pressure-ramp
+            # checkpoint, so it is intentionally saved.
+            self._SaveCurveCheckpoint(packing_state)
+        else:
+            self._SaveCurveCheckpoint(packing_state)
+
+        if self.is_in_inaccessibale_region2:
+            self._CompleteSimulation()
+
+        density_error = self.target_packing_density - self.final_packing_density
+        if density_error > self.tolerance_of_packing_density:
+            self._StartZeroFrictionPhase()
+            return
+
+        if density_error < -self.tolerance_of_packing_density:
+            print(
+                "The density sweep passed its final target; saving the last "
+                "stable packing."
+            )
+        self._CompleteSimulation()
+
+    def _AdvanceStressTarget(self):
+        if self.stress_target_index == len(self.stress_targets) - 1:
+            return False
+        self.stress_target_index += 1
+        self._SetTargetMeanStress(self.stress_targets[self.stress_target_index])
+        return True
+
+    def _StartZeroFrictionPhase(self):
+        for properties in self.spheres_model_part.Properties:
+            for subproperties in properties.GetSubProperties():
+                subproperties[STATIC_FRICTION] = 0.0
+                subproperties[DYNAMIC_FRICTION] = 0.0
+        self.ZeroFrictionPhase = True
+        self.zero_friction_phase_counter = 0
+
+    def _SaveCurveCheckpoint(self, packing_state):
+        self._WritePackingState("stress_tensor_save.txt", packing_state)
+
+        if self.curve_generation.mode == STRESS_SWEEP:
+            output_name = f"inletPGDEM_{round(self.target_mean_stress)}.mdpa"
+        elif self.curve_generation.mode == DENSITY_SWEEP:
+            density = packing_state["packing_density"]
+            output_name = (
+                f"inletPGDEM_density_{self.curve_checkpoint_index:03d}_"
+                f"{density:.6f}.mdpa"
+            )
+        else:
+            output_name = "inletPGDEM_target.mdpa"
+
+        second_stage_flag = self.second_stage_flag
+        self.second_stage_flag = False
+        try:
+            self.WriteOutMdpaFileOfParticles(output_name)
+        finally:
+            self.second_stage_flag = second_stage_flag
+        self.PrintResultsForGid(self.time)
+        self.curve_checkpoint_index += 1
+
+    def _CompleteSimulation(self):
+        self.WriteOutMdpaFileOfParticles("inletPGDEM.mdpa")
+        with open("success.txt", "w") as success_file:
+            success_file.write("Simulation completed successfully.")
+        self.copy_files_and_run_show_results()
+        exit(0)
 
     def FinalizeSolutionStep(self):
         super().FinalizeSolutionStep()

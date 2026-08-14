@@ -89,6 +89,11 @@ The path can be absolute or relative to the directory from which the command is 
 
 For running the particle packing generation process using different generation methods, different parameters need to be set in the [ParametersDEMGen.json][ParametersDEMGen_link]. Please study the [example case][examples_link] of different methods for futher usage.
 
+The improved radius expansion with servo control method can generate a single
+target packing, a constant-density stress sweep, or an ascending
+constant-stress density sweep. See the [curve generation configuration][curve_generation_link]
+for the input parameters and generated outputs.
+
 #### Packing Characterization
 
 If the related parameters in [ParametersDEMGen.json][ParametersDEMGen_link] are 'activated', the partcile packing characterization process will be run automatically. Those parameters are:
@@ -258,6 +263,7 @@ No liability and warranty are provided.
 [test_radius_expansion_method_link]:         ./example/test_radius_expansion_method
 [test_radius_expansion_with_servo_control_method_link]: ./example/test_radius_expansion_with_servo_control_method
 [test_improved_radius_expansion_with_servo_control_method_link]: ./example/test_improved_radius_expansion_with_servo_control_method
+[curve_generation_link]: ./docs/curve_generation.md
 [test_cubic_arrangement_method_link]:        ./example/test_cubic_arrangement_method
 [test_hpc_arrangement_method_link]:          ./example/test_hpc_arrangement_method
 [an_example_PDF_link]:                       ./docs/example_of_packing_characterization/all_measured_results.pdf

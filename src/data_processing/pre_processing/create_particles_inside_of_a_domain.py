@@ -19,6 +19,7 @@ from data_processing.pre_processing.particle_case_request import (
     ParticleGenerationContext,
 )
 from particles import ParticlePacking, SphericalParticle
+from curve_generation import load_curve_generation_settings
 
 
 class CreateParticlesInsideOfADomain():
@@ -57,7 +58,11 @@ class CreateParticlesInsideOfADomain():
 
         self.parameters_all = Parameters(json.dumps(parameters))
         self.parameters = self.parameters_all["random_particle_generation_parameters"]
-        self.initial_target_packing_density = self.parameters["target_packing_density"].GetDouble()
+        self.curve_generation = load_curve_generation_settings(
+            parameters,
+            self.context.run_dir / "ProjectParametersDEM.json",
+        )
+        self.initial_target_packing_density = self.curve_generation.initial_density
         self.tolerance_of_packing_density = self.parameters["tolerance_of_packing_density"].GetDouble()
         self.tolerance_of_unbalanced_force = self.parameters["tolerance_of_unbalanced_force"].GetDouble()
         self.tolerance_of_target_mean_stress = self.parameters["tolerance_of_target_mean_stress"].GetDouble()
@@ -88,6 +93,7 @@ class CreateParticlesInsideOfADomain():
             "tolerance_of_unbalanced_force": self.tolerance_of_unbalanced_force,
             "tolerance_of_target_mean_stress": self.tolerance_of_target_mean_stress,
             "minimum_mean_stress": self.minimum_mean_stress,
+            "curve_generation": self.curve_generation.to_dict(),
         }
         parameters_path = self.case_path / "demgen_case_parameters.json"
         with parameters_path.open("w", encoding="utf-8") as parameters_file:

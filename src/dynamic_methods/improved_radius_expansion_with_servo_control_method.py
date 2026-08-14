@@ -9,7 +9,10 @@ __date__        = "June 05, 2025"
 __license__     = "BSD 2-Clause License"
 #/////////////////////////////////////////////////
 
+from pathlib import Path
+
 from dynamic_methods.radius_expansion_with_servo_control_method import RadiusExpansionWithServoControlMethod
+from curve_generation import SINGLE_POINT, load_curve_generation_settings
 
 class ImprovedRadiusExpansionWithServoControlMethod(RadiusExpansionWithServoControlMethod):
     
@@ -20,3 +23,15 @@ class ImprovedRadiusExpansionWithServoControlMethod(RadiusExpansionWithServoCont
         script_name = "improved_radius_expansion_with_servo_control_method_run.py"
 
         return self._run_case_script(script_name, attempt)
+
+    def GetAttemptDensities(self, generation):
+        settings = load_curve_generation_settings(
+            self.parameters,
+            Path(self.run_path) / "ProjectParametersDEM.json",
+        )
+        if settings.mode == SINGLE_POINT:
+            return [
+                settings.generation_density - delta
+                for delta in generation["packing_density_delta_list"]
+            ]
+        return [settings.generation_density]
