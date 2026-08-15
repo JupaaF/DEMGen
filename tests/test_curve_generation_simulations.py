@@ -6,16 +6,22 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import threading
 import unittest
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-EXAMPLE_DIR = (
-    PROJECT_ROOT
-    / "example"
-    / "test_improved_radius_expansion_with_servo_control_method"
+STUDY_CASE_DIR = Path(
+    os.environ.get(
+        "DEMGEN_STUDY_CASE_DIR",
+        "/home/juan-pablo/Documents/Resultados DEMGen/study_cases/"
+        "a_normal_case/uniform_hard_50kPa_0.625",
+    )
 )
 RUN_SIMULATIONS = os.environ.get("DEMGEN_RUN_SIMULATION_TESTS") == "1"
+STRICT_STRESS_TOLERANCE = 10.0
+TARGET_DENSITY = 0.625
+REDUCED_DOMAIN_LENGTH = 0.084
 
 
 @unittest.skipUnless(
@@ -27,15 +33,51 @@ class CurveGenerationSimulationTests(unittest.TestCase):
         with self.run_simulation(
             {
                 "mode": "single_point",
-                "target_density": 0.6,
-                "target_stress": 100000000.0,
+                "target_density": TARGET_DENSITY,
+                "target_stress": 50000.0,
             },
-            density_tolerance=0.002,
+            density_tolerance=0.0001,
         ) as case_dir:
             self.assert_successful_case(case_dir)
             self.assertEqual(self.checkpoint_rows(case_dir), 1)
             self.assertTrue((case_dir / "inletPGDEM_target.mdpa").is_file())
-            self.assert_density_near_sixty_percent(case_dir)
+            self.assert_density_near_sixty_two_percent(case_dir)
+            self.assert_checkpoint_stresses(
+                case_dir,
+                [50000.0],
+                STRICT_STRESS_TOLERANCE,
+            )
+            self.assert_complete_measurements(case_dir)
+            self.assert_gid_checkpoints(case_dir)
+
+    def test_zigzag_point_saves_only_the_final_fractional_search_result(self):
+        with self.run_simulation(
+            {
+                "mode": "zigzag_point",
+                "initial_density": 0.605,
+                "initial_stress": 12500.0,
+                "target_density": TARGET_DENSITY,
+                "target_stress": 50000.0,
+                "step_fraction": 0.5,
+                "maximum_iterations": 20,
+            },
+            density_tolerance=0.0001,
+        ) as case_dir:
+            self.assert_successful_case(case_dir)
+            targets = self.target_sequence(case_dir)
+            self.assertEqual(targets[0], 25000.0)
+            self.assertEqual(targets[-1], 50000.0)
+            self.assertGreaterEqual(len(targets), 2)
+            self.assertEqual(self.checkpoint_rows(case_dir), 1)
+            self.assertTrue((case_dir / "inletPGDEM_target.mdpa").is_file())
+            self.assertFalse(list(case_dir.glob("inletPGDEM_density_*.mdpa")))
+            self.assertFalse(list(case_dir.glob("inletPGDEM_[0-9]*.mdpa")))
+            self.assert_density_near_sixty_two_percent(case_dir)
+            self.assert_checkpoint_stresses(
+                case_dir,
+                [50000.0],
+                STRICT_STRESS_TOLERANCE,
+            )
             self.assert_complete_measurements(case_dir)
             self.assert_gid_checkpoints(case_dir)
 
@@ -43,22 +85,27 @@ class CurveGenerationSimulationTests(unittest.TestCase):
         with self.run_simulation(
             {
                 "mode": "stress_sweep",
-                "initial_density": 0.6,
-                "initial_stress": 100000000.0,
-                "final_stress": 400000000.0,
+                "initial_density": TARGET_DENSITY,
+                "initial_stress": 12500.0,
+                "final_stress": 50000.0,
                 "number_of_steps": 2,
             },
-            density_tolerance=0.002,
+            density_tolerance=0.0001,
         ) as case_dir:
             self.assert_successful_case(case_dir)
             self.assertEqual(
                 self.target_sequence(case_dir),
-                [100000000.0, 200000000.0, 400000000.0],
+                [12500.0, 25000.0, 50000.0],
             )
             self.assertEqual(self.checkpoint_rows(case_dir), 3)
-            for target in (100000000, 200000000, 400000000):
+            for target in (12500, 25000, 50000):
                 self.assertTrue((case_dir / f"inletPGDEM_{target}.mdpa").is_file())
-            self.assert_density_near_sixty_percent(case_dir)
+            self.assert_density_near_sixty_two_percent(case_dir)
+            self.assert_checkpoint_stresses(
+                case_dir,
+                [12500.0, 25000.0, 50000.0],
+                STRICT_STRESS_TOLERANCE,
+            )
             self.assert_complete_measurements(case_dir)
             self.assert_gid_checkpoints(case_dir)
 
@@ -66,20 +113,25 @@ class CurveGenerationSimulationTests(unittest.TestCase):
         with self.run_simulation(
             {
                 "mode": "stress_sweep",
-                "initial_density": 0.6,
-                "initial_stress": 400000000.0,
-                "final_stress": 100000000.0,
+                "initial_density": TARGET_DENSITY,
+                "initial_stress": 50000.0,
+                "final_stress": 12500.0,
                 "number_of_steps": 2,
             },
-            density_tolerance=0.002,
+            density_tolerance=0.0001,
         ) as case_dir:
             self.assert_successful_case(case_dir)
             self.assertEqual(
                 self.target_sequence(case_dir),
-                [400000000.0, 200000000.0, 100000000.0],
+                [50000.0, 25000.0, 12500.0],
             )
             self.assertEqual(self.checkpoint_rows(case_dir), 3)
-            self.assert_density_near_sixty_percent(case_dir)
+            self.assert_density_near_sixty_two_percent(case_dir)
+            self.assert_checkpoint_stresses(
+                case_dir,
+                [50000.0, 25000.0, 12500.0],
+                STRICT_STRESS_TOLERANCE,
+            )
             self.assert_complete_measurements(case_dir)
             self.assert_gid_checkpoints(case_dir)
 
@@ -87,30 +139,34 @@ class CurveGenerationSimulationTests(unittest.TestCase):
         with self.run_simulation(
             {
                 "mode": "density_sweep",
-                "initial_density": 0.59,
-                "final_density": 0.6,
-                "initial_stress": 100000000.0,
-                "fixed_stress": 400000000.0,
+                "initial_density": 0.615,
+                "final_density": TARGET_DENSITY,
+                "initial_stress": 12500.0,
+                "fixed_stress": 50000.0,
                 "number_of_steps": 1,
             },
-            density_tolerance=0.002,
-            timeout=90,
+            density_tolerance=0.0001,
         ) as case_dir:
             self.assert_successful_case(case_dir)
             self.assertEqual(
                 self.target_sequence(case_dir),
-                [100000000.0, 400000000.0],
+                [12500.0, 50000.0],
             )
             density_packings = sorted(case_dir.glob("inletPGDEM_density_*.mdpa"))
             self.assertGreaterEqual(len(density_packings), 2)
             self.assertEqual(len(density_packings), self.checkpoint_rows(case_dir))
-            self.assertFalse((case_dir / "inletPGDEM_100000000.mdpa").exists())
-            self.assertFalse((case_dir / "inletPGDEM_400000000.mdpa").exists())
+            self.assertFalse((case_dir / "inletPGDEM_12500.mdpa").exists())
+            self.assertFalse((case_dir / "inletPGDEM_50000.mdpa").exists())
 
             densities = self.checkpoint_densities(case_dir)
             self.assertGreater(densities[-1], densities[0])
-            self.assertGreaterEqual(densities[-1], 0.598)
-            self.assert_density_near_sixty_percent(case_dir)
+            self.assertGreaterEqual(densities[-1], 0.623)
+            self.assert_density_near_sixty_two_percent(case_dir)
+            self.assert_checkpoint_stresses(
+                case_dir,
+                [50000.0] * len(density_packings),
+                STRICT_STRESS_TOLERANCE,
+            )
             self.assert_complete_measurements(case_dir)
             self.assert_gid_checkpoints(case_dir)
 
@@ -118,22 +174,22 @@ class CurveGenerationSimulationTests(unittest.TestCase):
         self,
         curve_generation,
         density_tolerance=1.0,
-        timeout=120,
+        stress_tolerance=STRICT_STRESS_TOLERANCE,
+        timeout=3600,
     ):
         temporary_case = tempfile.TemporaryDirectory(prefix="demgen-curve-test-")
         run_dir = Path(temporary_case.name)
         self.addCleanup(temporary_case.cleanup)
 
         parameters = json.loads(
-            (EXAMPLE_DIR / "ParametersDEMGen.json").read_text(encoding="utf-8")
+            (STUDY_CASE_DIR / "ParametersDEMGen.json").read_text(encoding="utf-8")
         )
         parameters.update(
             {
                 "packing_num": 1,
-                "domain_length_x": 0.0006,
-                "domain_length_y": 0.0006,
-                "domain_length_z": 0.0006,
-                "particle_radius_max": 0.00005,
+                "domain_length_x": REDUCED_DOMAIN_LENGTH,
+                "domain_length_y": REDUCED_DOMAIN_LENGTH,
+                "domain_length_z": REDUCED_DOMAIN_LENGTH,
                 "packing_charcterization_option": False,
                 "curve_generation": curve_generation,
             }
@@ -141,55 +197,38 @@ class CurveGenerationSimulationTests(unittest.TestCase):
         generation = parameters["random_particle_generation_parameters"]
         generation.update(
             {
-                "RADIUS": 0.00005,
-                "MINIMUM_RADIUS": 0.00005,
-                "MAXIMUM_RADIUS": 0.00005,
-                "STANDARD_DEVIATION": 0.0,
-                "SEED": 7,
-                "DO_USE_SEED": True,
-                "target_packing_density": 0.6,
+                "target_packing_density": TARGET_DENSITY,
                 "tolerance_of_packing_density": density_tolerance,
-                "tolerance_of_unbalanced_force": 1e12,
-                "tolerance_of_target_mean_stress": 1e12,
-                "minimum_mean_stress": 1.0,
-                "packing_density_delta_list": [0.0],
+                "tolerance_of_target_mean_stress": stress_tolerance,
             }
         )
+        if curve_generation["mode"] != "single_point":
+            generation["packing_density_delta_list"] = [0.0]
         generation["random_variable_settings"].update(
             {
-                "possible_values": [0.00005],
-                "relative_frequencies": [1.0],
-                "radius_scale_multiplier": 0.5,
                 "do_use_seed": True,
-                "seed": 7,
+                "seed": 1,
             }
         )
         parameters_path = run_dir / "ParametersDEMGen.json"
         parameters_path.write_text(json.dumps(parameters, indent=2), encoding="utf-8")
 
         project_parameters = json.loads(
-            (EXAMPLE_DIR / "ProjectParametersDEM.json").read_text(encoding="utf-8")
+            (STUDY_CASE_DIR / "ProjectParametersDEM.json").read_text(encoding="utf-8")
         )
         project_parameters.update(
             {
-                "BoundingBoxMaxX": 0.0003,
-                "BoundingBoxMaxY": 0.0003,
-                "BoundingBoxMaxZ": 0.0003,
-                "BoundingBoxMinX": -0.0003,
-                "BoundingBoxMinY": -0.0003,
-                "BoundingBoxMinZ": -0.0003,
-                "MaxTimeStep": 2e-8,
-                "FinalTime": 2e-7,
-                "GraphExportFreq": 2e-7,
-                "VelTrapGraphExportFreq": 2e-7,
-                "OutputTimeStep": 2e-7,
-            }
-        )
-        project_parameters["BoundingBoxServoLoadingSettings"].update(
-            {
-                "BoundingBoxServoLoadingStress": [1.0, 1.0, 1.0],
-                "BoundingBoxServoLoadingVelocityMax": 1.0,
-                "MeanParticleDiameterD50": 0.0001,
+                "BoundingBoxMaxX": REDUCED_DOMAIN_LENGTH / 2,
+                "BoundingBoxMaxY": REDUCED_DOMAIN_LENGTH / 2,
+                "BoundingBoxMaxZ": REDUCED_DOMAIN_LENGTH / 2,
+                "BoundingBoxMinX": -REDUCED_DOMAIN_LENGTH / 2,
+                "BoundingBoxMinY": -REDUCED_DOMAIN_LENGTH / 2,
+                "BoundingBoxMinZ": -REDUCED_DOMAIN_LENGTH / 2,
+                "MaxTimeStep": 5e-7,
+                "FinalTime": 2.5e-4,
+                "GraphExportFreq": 2.5e-4,
+                "VelTrapGraphExportFreq": 2.5e-4,
+                "OutputTimeStep": 2.5e-4,
             }
         )
         (run_dir / "ProjectParametersDEM.json").write_text(
@@ -197,12 +236,17 @@ class CurveGenerationSimulationTests(unittest.TestCase):
             encoding="utf-8",
         )
         shutil.copyfile(
-            EXAMPLE_DIR / "MaterialsDEM.json",
+            STUDY_CASE_DIR / "MaterialsDEM.json",
             run_dir / "MaterialsDEM.json",
         )
 
         environment = os.environ.copy()
         environment["OMP_NUM_THREADS"] = "1"
+        print(
+            "\n[simulation-suite] starting "
+            f"mode={curve_generation['mode']} with {curve_generation}",
+            flush=True,
+        )
         process = subprocess.Popen(
             [
                 sys.executable,
@@ -216,24 +260,42 @@ class CurveGenerationSimulationTests(unittest.TestCase):
             stderr=subprocess.STDOUT,
             start_new_session=True,
         )
+        output_lines = []
+
+        def relay_progress():
+            for line in process.stdout:
+                output_lines.append(line)
+                if "[curve_generation]" in line:
+                    print(line, end="", flush=True)
+
+        output_reader = threading.Thread(target=relay_progress, daemon=True)
+        output_reader.start()
         try:
-            output, _ = process.communicate(timeout=timeout)
+            process.wait(timeout=timeout)
         except subprocess.TimeoutExpired:
             os.killpg(process.pid, signal.SIGTERM)
             try:
-                output, _ = process.communicate(timeout=5)
+                process.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid, signal.SIGKILL)
-                output, _ = process.communicate()
+                process.wait()
+            output_reader.join(timeout=5)
+            output = "".join(output_lines)
             self.fail(
                 f"DEMGen exceeded the {timeout}-second timeout.\n{output[-12000:]}"
             )
 
+        output_reader.join(timeout=5)
+        output = "".join(output_lines)
         (run_dir / "simulation.log").write_text(output, encoding="utf-8")
         if process.returncode != 0:
             self.fail(
                 f"DEMGen exited with {process.returncode}.\n{output[-12000:]}"
             )
+        print(
+            f"[simulation-suite] completed mode={curve_generation['mode']}",
+            flush=True,
+        )
 
         case_dir = run_dir / "generated_cases" / "case_1"
         return _CaseDirectory(temporary_case, case_dir)
@@ -255,6 +317,7 @@ class CurveGenerationSimulationTests(unittest.TestCase):
         gid_files = list((case_dir / "inletPG_Post_Files").glob("*"))
         self.assertTrue(gid_files, "The simulation did not produce GiD results.")
         self.assertGreaterEqual(self.particle_count(case_dir), 200)
+        self.assertLessEqual(self.particle_count(case_dir), 700)
 
     def checkpoint_rows(self, case_dir):
         return len(
@@ -269,10 +332,24 @@ class CurveGenerationSimulationTests(unittest.TestCase):
             .splitlines()
         ]
 
-    def assert_density_near_sixty_percent(self, case_dir):
+    def checkpoint_stresses(self, case_dir):
+        return [
+            float(row.split()[1])
+            for row in (case_dir / "stress_tensor_save.txt")
+            .read_text(encoding="utf-8")
+            .splitlines()
+        ]
+
+    def assert_checkpoint_stresses(self, case_dir, targets, tolerance):
+        stresses = self.checkpoint_stresses(case_dir)
+        self.assertEqual(len(stresses), len(targets))
+        for measured, target in zip(stresses, targets):
+            self.assertLessEqual(abs(measured - target), tolerance)
+
+    def assert_density_near_sixty_two_percent(self, case_dir):
         for density in self.checkpoint_densities(case_dir):
-            self.assertGreaterEqual(density, 0.59)
-            self.assertLessEqual(density, 0.61)
+            self.assertGreaterEqual(density, 0.60)
+            self.assertLessEqual(density, 0.635)
 
     def target_sequence(self, case_dir):
         targets = [

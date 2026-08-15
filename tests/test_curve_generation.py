@@ -4,6 +4,7 @@ from src.curve_generation import (
     DENSITY_SWEEP,
     SINGLE_POINT,
     STRESS_SWEEP,
+    ZIGZAG_POINT,
     logarithmic_stress_targets,
     parse_curve_generation_settings,
 )
@@ -44,6 +45,79 @@ class CurveGenerationSettingsTests(unittest.TestCase):
 
         self.assertEqual(settings.generation_density, 0.625)
         self.assertEqual(settings.stress_targets, (50000.0,))
+
+    def test_zigzag_point_uses_fractional_targets(self):
+        settings = parse_curve_generation_settings(
+            input_parameters(
+                {
+                    "mode": ZIGZAG_POINT,
+                    "initial_density": 0.5,
+                    "initial_stress": 1000.0,
+                    "target_density": 0.6,
+                    "target_stress": 100000.0,
+                    "step_fraction": 0.5,
+                    "maximum_iterations": 20,
+                }
+            ),
+            5000.0,
+        )
+
+        self.assertEqual(settings.mode, ZIGZAG_POINT)
+        self.assertEqual(settings.generation_density, 0.5)
+        self.assertEqual(settings.final_density, 0.6)
+        self.assertEqual(settings.stress_targets, (10000.0,))
+        self.assertEqual(settings.step_fraction, 0.5)
+        self.assertEqual(settings.maximum_iterations, 20)
+
+    def test_zigzag_point_supports_descending_stress_corrections(self):
+        settings = parse_curve_generation_settings(
+            input_parameters(
+                {
+                    "mode": ZIGZAG_POINT,
+                    "initial_density": 0.5,
+                    "initial_stress": 100000.0,
+                    "target_density": 0.6,
+                    "target_stress": 1000.0,
+                    "step_fraction": 0.5,
+                }
+            ),
+            5000.0,
+        )
+
+        self.assertEqual(settings.stress_targets, (10000.0,))
+
+    def test_zigzag_point_rejects_nonascending_density(self):
+        with self.assertRaisesRegex(ValueError, "target_density"):
+            parse_curve_generation_settings(
+                input_parameters(
+                    {
+                        "mode": ZIGZAG_POINT,
+                        "initial_density": 0.6,
+                        "initial_stress": 1000.0,
+                        "target_density": 0.6,
+                        "target_stress": 10000.0,
+                    }
+                ),
+                5000.0,
+            )
+
+    def test_zigzag_point_rejects_invalid_step_fraction(self):
+        for fraction in (0.0, 1.0):
+            with self.subTest(fraction=fraction):
+                with self.assertRaisesRegex(ValueError, "step_fraction"):
+                    parse_curve_generation_settings(
+                        input_parameters(
+                            {
+                                "mode": ZIGZAG_POINT,
+                                "initial_density": 0.5,
+                                "initial_stress": 1000.0,
+                                "target_density": 0.6,
+                                "target_stress": 10000.0,
+                                "step_fraction": fraction,
+                            }
+                        ),
+                        5000.0,
+                    )
 
     def test_stress_sweep_supports_both_directions(self):
         lower = parse_curve_generation_settings(

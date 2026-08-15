@@ -7,7 +7,8 @@ from typing import Any, Mapping
 SINGLE_POINT = "single_point"
 STRESS_SWEEP = "stress_sweep"
 DENSITY_SWEEP = "density_sweep"
-SUPPORTED_MODES = (SINGLE_POINT, STRESS_SWEEP, DENSITY_SWEEP)
+ZIGZAG_POINT = "zigzag_point"
+SUPPORTED_MODES = (SINGLE_POINT, STRESS_SWEEP, DENSITY_SWEEP, ZIGZAG_POINT)
 
 
 @dataclass(frozen=True)
@@ -18,6 +19,8 @@ class CurveGenerationSettings:
     initial_stress: float
     final_stress: float
     number_of_steps: int
+    step_fraction: float = 0.5
+    maximum_iterations: int = 20
 
     @property
     def generation_density(self) -> float:
@@ -27,10 +30,22 @@ class CurveGenerationSettings:
     def stress_targets(self) -> tuple[float, ...]:
         if self.mode == SINGLE_POINT:
             return (self.final_stress,)
+        if self.mode == ZIGZAG_POINT:
+            return (self.next_zigzag_stress(self.initial_stress),)
         return logarithmic_stress_targets(
             self.initial_stress,
             self.final_stress,
             self.number_of_steps,
+        )
+
+    def next_zigzag_stress(self, current_stress: float) -> float:
+        return current_stress * (
+            self.final_stress / current_stress
+        ) ** self.step_fraction
+
+    def next_zigzag_density(self, current_density: float) -> float:
+        return current_density + self.step_fraction * (
+            self.final_density - current_density
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -107,6 +122,49 @@ def parse_curve_generation_settings(
             initial_stress=target_stress,
             final_stress=target_stress,
             number_of_steps=1,
+        )
+
+    if mode == ZIGZAG_POINT:
+        initial_density = _density(
+            _required(raw_settings, "initial_density"),
+            "curve_generation.initial_density",
+        )
+        target_density = _density(
+            _required(raw_settings, "target_density"),
+            "curve_generation.target_density",
+        )
+        if target_density <= initial_density:
+            raise ValueError(
+                "A zigzag_point requires target_density to be greater than "
+                "initial_density."
+            )
+        initial_stress = _stress_at_or_above_minimum(
+            _required(raw_settings, "initial_stress"),
+            "curve_generation.initial_stress",
+            minimum_stress,
+        )
+        target_stress = _stress_at_or_above_minimum(
+            _required(raw_settings, "target_stress"),
+            "curve_generation.target_stress",
+            minimum_stress,
+        )
+        step_fraction = _fraction(
+            raw_settings.get("step_fraction", 0.5),
+            "curve_generation.step_fraction",
+        )
+        maximum_iterations = _positive_integer(
+            raw_settings.get("maximum_iterations", 20),
+            "curve_generation.maximum_iterations",
+        )
+        return CurveGenerationSettings(
+            mode=mode,
+            initial_density=initial_density,
+            final_density=target_density,
+            initial_stress=initial_stress,
+            final_stress=target_stress,
+            number_of_steps=1,
+            step_fraction=step_fraction,
+            maximum_iterations=maximum_iterations,
         )
 
     initial_density = _density(
@@ -211,6 +269,13 @@ def _positive_number(value: Any, name: str) -> float:
     if number <= 0.0:
         raise ValueError(f"{name} must be greater than zero. Got {number}.")
     return number
+
+
+def _fraction(value: Any, name: str) -> float:
+    fraction = _number(value, name)
+    if not 0.0 < fraction < 1.0:
+        raise ValueError(f"{name} must be between 0 and 1. Got {fraction}.")
+    return fraction
 
 
 def _number(value: Any, name: str) -> float:

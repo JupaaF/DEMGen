@@ -34,6 +34,7 @@ from curve_generation import (
     DENSITY_SWEEP,
     SINGLE_POINT,
     STRESS_SWEEP,
+    ZIGZAG_POINT,
 )
 
 if os.path.exists("normalized_kinematic_energy.txt"):
@@ -91,6 +92,7 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
         self.final_check_counter = 0
         self.final_check_counter_ini = 0
         self.measured_stress_list = []
+        self.last_curve_state_report = 0.0
         self.target_packing_density = self.case_parameters["servo_target_packing_density"]
         self.tolerance_of_packing_density = self.case_parameters["tolerance_of_packing_density"]
         self.tolerance_of_unbalanced_force = self.case_parameters["tolerance_of_unbalanced_force"]
@@ -106,7 +108,39 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
         self.stress_target_index = 0
         self.curve_checkpoint_index = 0
         self.density_sweep_phase = "stress_ramp"
+        self.zigzag_phase = "stress"
+        self.zigzag_stress_corrections = 1
+        self._ReportCurveProgress(
+            "starting "
+            f"mode={self.curve_generation.mode}, "
+            f"density={self.curve_generation.initial_density:.6f}"
+            f"->{self.curve_generation.final_density:.6f}, "
+            f"stress={self.curve_generation.initial_stress:.6f}"
+            f"->{self.curve_generation.final_stress:.6f} Pa, "
+            f"stress_tolerance={self.tolerance_of_target_mean_stress:.6f} Pa"
+        )
         self._SetTargetMeanStress(self.stress_targets[0])
+        self.zigzag_reached_final_stress_target = (
+            self.target_mean_stress == self.curve_generation.final_stress
+        )
+
+    @staticmethod
+    def _ReportCurveProgress(message):
+        print(f"[curve_generation] {message}", flush=True)
+
+    def _ReportCurrentCurveState(self, packing_state):
+        now = time.time()
+        if now - self.last_curve_state_report < 10.0:
+            return
+        phase = "servo" if self.is_start_servo_control else "preparation"
+        self._ReportCurveProgress(
+            f"current phase={phase}, simulation_time={self.time:.9g}, "
+            f"stress={packing_state['mean_stress']:.6f}/"
+            f"{self.target_mean_stress:.6f} Pa, "
+            f"density={packing_state['packing_density']:.6f}/"
+            f"{self.target_packing_density:.6f}"
+        )
+        self.last_curve_state_report = now
 
     def _GetCurveGenerationSettings(self):
         raw_settings = self.case_parameters.get("curve_generation")
@@ -135,6 +169,9 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
             "BoundingBoxServoLoadingStress"
         ].SetVector([target_stress, target_stress, target_stress])
         self.measured_stress_list.clear()
+        self._ReportCurveProgress(
+            f"seeking stress={target_stress:.6f} Pa"
+        )
 
     def ReadMaterialsFile(self):
         adapted_to_current_os_relative_path = pathlib.Path(self.DEM_parameters["solver_settings"]["material_import_settings"]["materials_filename"].GetString())
@@ -251,6 +288,7 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
 
 
             packing_state = self._MeasurePackingState()
+            self._ReportCurrentCurveState(packing_state)
             mean_stress = packing_state["mean_stress"]
             self._WritePackingState(
                 "stress_tensor_1.txt" if self.is_start_servo_control else "stress_tensor_0.txt",
@@ -381,6 +419,12 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
         return [tensor[row][column] for row in range(3) for column in range(3)]
 
     def _HandleStableServoState(self, packing_state):
+        self._ReportCurveProgress(
+            "stable state: "
+            f"target_stress={self.target_mean_stress:.6f} Pa, "
+            f"mean_stress={packing_state['mean_stress']:.6f} Pa, "
+            f"density={packing_state['packing_density']:.6f}"
+        )
         mode = self.curve_generation.mode
         if mode == SINGLE_POINT:
             self._HandleSinglePoint(packing_state)
@@ -388,6 +432,8 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
             self._HandleStressSweep(packing_state)
         elif mode == DENSITY_SWEEP:
             self._HandleDensitySweep(packing_state)
+        elif mode == ZIGZAG_POINT:
+            self._HandleZigzagPoint(packing_state)
         else:
             raise RuntimeError(f"Unsupported curve generation mode: {mode}")
 
@@ -427,6 +473,10 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
             self.density_sweep_phase = "density_increase"
             self.target_packing_density = self.final_target_packing_density
             self.zero_friction_phase_counter_target = 1000
+            self._ReportCurveProgress(
+                "pressure ramp completed; beginning density sweep toward "
+                f"density={self.target_packing_density:.6f}"
+            )
             # This is the first point on the vertical line, not a pressure-ramp
             # checkpoint, so it is intentionally saved.
             self._SaveCurveCheckpoint(packing_state)
@@ -448,6 +498,99 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
             )
         self._CompleteSimulation()
 
+    def _HandleZigzagPoint(self, packing_state):
+        if self._ZigzagReachedFinalTarget(packing_state):
+            self._SaveCurveCheckpoint(packing_state)
+            self._CompleteSimulation()
+
+        final_density_error = (
+            self.final_target_packing_density - self.final_packing_density
+        )
+        if final_density_error < -self.tolerance_of_packing_density:
+            raise RuntimeError(
+                "The zigzag search exceeded target_density, and density "
+                "corrections are only allowed to ascend."
+            )
+
+        if self.zigzag_phase == "density":
+            partial_density_error = (
+                self.target_packing_density - self.final_packing_density
+            )
+            if partial_density_error > self.tolerance_of_packing_density:
+                self._StartZeroFrictionPhase()
+                return
+
+            self.zigzag_phase = "stress"
+            self._AdvanceZigzagStress(packing_state)
+            return
+
+        if final_density_error > self.tolerance_of_packing_density:
+            next_density = self.curve_generation.next_zigzag_density(
+                self.final_packing_density
+            )
+            if (
+                self.final_target_packing_density - next_density
+                <= self.tolerance_of_packing_density
+            ):
+                next_density = self.final_target_packing_density
+            self.target_packing_density = next_density
+            self.zigzag_phase = "density"
+            self.zero_friction_phase_counter_target = 1000
+            self._ReportCurveProgress(
+                f"zigzag density leg toward density={next_density:.6f}"
+            )
+            self._StartZeroFrictionPhase()
+            return
+
+        self._AdvanceZigzagStress(packing_state)
+
+    def _ZigzagReachedFinalTarget(self, packing_state):
+        density_is_stable = (
+            abs(self.final_target_packing_density - self.final_packing_density)
+            <= self.tolerance_of_packing_density
+        )
+        stress_is_stable = (
+            abs(self.curve_generation.final_stress - packing_state["mean_stress"])
+            <= self.tolerance_of_target_mean_stress
+        )
+        return (
+            self.zigzag_reached_final_stress_target
+            and density_is_stable
+            and stress_is_stable
+        )
+
+    def _AdvanceZigzagStress(self, packing_state):
+        if (
+            self.zigzag_stress_corrections
+            >= self.curve_generation.maximum_iterations
+        ):
+            raise RuntimeError(
+                "The zigzag search did not reach the requested density and "
+                "stress within maximum_iterations."
+            )
+
+        measured_stress = max(
+            packing_state["mean_stress"], self.minimum_mean_confining_stress
+        )
+        final_stress = self.curve_generation.final_stress
+        controlled_error = self.target_mean_stress - final_stress
+        measured_error = measured_stress - final_stress
+        if controlled_error * measured_error < 0.0:
+            current_stress = measured_stress
+        else:
+            current_stress = self.target_mean_stress
+        next_stress = self.curve_generation.next_zigzag_stress(current_stress)
+        if (
+            abs(final_stress - next_stress)
+            <= self.tolerance_of_target_mean_stress
+        ):
+            next_stress = final_stress
+
+        self.zigzag_stress_corrections += 1
+        self._SetTargetMeanStress(next_stress)
+        if next_stress == final_stress:
+            self.zigzag_reached_final_stress_target = True
+
     def _AdvanceStressTarget(self):
         if self.stress_target_index == len(self.stress_targets) - 1:
             return False
@@ -456,6 +599,10 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
         return True
 
     def _StartZeroFrictionPhase(self):
+        self._ReportCurveProgress(
+            "starting zero-friction densification toward "
+            f"density={self.target_packing_density:.6f}"
+        )
         for properties in self.spheres_model_part.Properties:
             for subproperties in properties.GetSubProperties():
                 subproperties[STATIC_FRICTION] = 0.0
@@ -484,9 +631,16 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
         finally:
             self.second_stage_flag = second_stage_flag
         self.PrintResultsForGid(self.time)
+        self._ReportCurveProgress(
+            f"saved checkpoint={self.curve_checkpoint_index + 1} as {output_name}"
+        )
         self.curve_checkpoint_index += 1
 
     def _CompleteSimulation(self):
+        self._ReportCurveProgress(
+            f"completed mode={self.curve_generation.mode} with "
+            f"checkpoints={self.curve_checkpoint_index}"
+        )
         self.WriteOutMdpaFileOfParticles("inletPGDEM.mdpa")
         with open("success.txt", "w") as success_file:
             success_file.write("Simulation completed successfully.")

@@ -90,9 +90,10 @@ The path can be absolute or relative to the directory from which the command is 
 For running the particle packing generation process using different generation methods, different parameters need to be set in the [ParametersDEMGen.json][ParametersDEMGen_link]. Please study the [example case][examples_link] of different methods for futher usage.
 
 The improved radius expansion with servo control method can generate a single
-target packing, a constant-density stress sweep, or an ascending
-constant-stress density sweep. See the [curve generation configuration][curve_generation_link]
-for the input parameters and generated outputs.
+target packing directly or through a fractional zigzag search, a
+constant-density stress sweep, or an ascending constant-stress density sweep.
+See the [curve generation configuration][curve_generation_link] for the input
+parameters and generated outputs.
 
 #### Packing Characterization
 
