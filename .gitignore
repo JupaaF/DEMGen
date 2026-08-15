@@ -138,3 +138,11 @@ dmypy.json
 /example/test_improved_radius_expansion_with_servo_control_method/generated_cases/
 /example/test_cubic_arrangement_method/show_packing/
 /example/test_hpc_arrangement_method/show_packing/
+
+# Manim and Manim Slides outputs
+media/
+slides/
+**/media/
+**/slides/
+presentation_slides_assets/
+*.html
