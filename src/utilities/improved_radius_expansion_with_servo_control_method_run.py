@@ -30,6 +30,7 @@ from KratosMultiphysics import Logger
 from demgen_case_parameters import load_case_parameters
 from particles import ParticlePacking, SphericalParticle
 from curve_generation import (
+    CYCLIC_STRESS,
     CurveGenerationSettings,
     DENSITY_SWEEP,
     SINGLE_POINT,
@@ -434,6 +435,8 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
             self._HandleDensitySweep(packing_state)
         elif mode == ZIGZAG_POINT:
             self._HandleZigzagPoint(packing_state)
+        elif mode == CYCLIC_STRESS:
+            self._HandleStressSweep(packing_state)
         else:
             raise RuntimeError(f"Unsupported curve generation mode: {mode}")
 
@@ -595,6 +598,17 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
         if self.stress_target_index == len(self.stress_targets) - 1:
             return False
         self.stress_target_index += 1
+        if self.curve_generation.mode == CYCLIC_STRESS:
+            direction = (
+                "compression"
+                if self.stress_targets[self.stress_target_index]
+                > self.stress_targets[self.stress_target_index - 1]
+                else "decompression"
+            )
+            cycle = (self.stress_target_index + 1) // 2
+            self._ReportCurveProgress(
+                f"starting cycle={cycle} direction={direction}"
+            )
         self._SetTargetMeanStress(self.stress_targets[self.stress_target_index])
         return True
 
@@ -615,6 +629,18 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
 
         if self.curve_generation.mode == STRESS_SWEEP:
             output_name = f"inletPGDEM_{round(self.target_mean_stress)}.mdpa"
+        elif self.curve_generation.mode == CYCLIC_STRESS:
+            if self.stress_target_index == 0:
+                cycle = 0
+                endpoint = "minimum"
+            else:
+                cycle = (self.stress_target_index + 1) // 2
+                endpoint = (
+                    "maximum" if self.stress_target_index % 2 else "minimum"
+                )
+            output_name = (
+                f"inletPGDEM_cycle_{cycle:03d}_{endpoint}.mdpa"
+            )
         elif self.curve_generation.mode == DENSITY_SWEEP:
             density = packing_state["packing_density"]
             output_name = (

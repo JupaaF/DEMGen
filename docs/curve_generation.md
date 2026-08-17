@@ -85,6 +85,40 @@ the number of intervals, so both endpoints are saved and the example produces
 Density is set by the initial packing and is not actively controlled during
 the pressure sweep. It can therefore vary slightly along the curve.
 
+## Cyclic stress
+
+```json
+"curve_generation": {
+    "mode": "cyclic_stress",
+    "initial_density": 0.625,
+    "minimum_stress": 12500.0,
+    "maximum_stress": 50000.0,
+    "number_of_cycles": 3
+}
+```
+
+DEMGen first stabilizes and saves the packing at `minimum_stress`. Each complete
+cycle then compresses to `maximum_stress` and decompresses back to
+`minimum_stress`. Thus, the example follows seven stable targets:
+
+```text
+12500, 50000, 12500, 50000, 12500, 50000, 12500 Pa
+```
+
+Both stress limits must be at least `minimum_mean_stress`, `maximum_stress`
+must be greater than `minimum_stress`, and `number_of_cycles` must be a positive
+integer. Density is initialized from `initial_density` but is not controlled
+during cycling; it changes naturally as the servo compresses and decompresses
+the box.
+
+Every stable endpoint is saved. For example, the first cycle produces:
+
+```text
+inletPGDEM_cycle_000_minimum.mdpa
+inletPGDEM_cycle_001_maximum.mdpa
+inletPGDEM_cycle_001_minimum.mdpa
+```
+
 ## Constant-stress ascending density sweep
 
 ```json
@@ -123,9 +157,9 @@ final `inletPGDEM_target.mdpa`, measurement row, and GiD checkpoint are written.
 
 ## Small-simulation validation suite
 
-The integration suite runs the public DEMGen command against five deterministic
+The integration suite runs the public DEMGen command against six deterministic
 cases: single point, zigzag point, ascending stress sweep, descending stress
-sweep, and ascending density sweep. The single-point and stress-sweep cases
+sweep, ascending density sweep, and cyclic stress. The single-point and stress-sweep cases
 target density `0.60` with 248 particles. The zigzag case climbs from `0.58` to
 `0.60` with 240 particles, and the vertical case climbs from `0.59` to `0.60`
 with 244 particles. Every case uses an isolated temporary directory. Run it in
@@ -137,6 +171,7 @@ DEMGEN_RUN_SIMULATION_TESTS=1 python3 -m unittest tests.test_curve_generation_si
 
 The tests validate successful completion, logarithmic target order, the
 fractional zigzag target, checkpoint MDPA files, GiD results, all 44 measured
-values, increasing density, and the absence of intermediate zigzag packings.
+values, increasing density, cyclic extrema, and the absence of intermediate
+zigzag packings.
 The environment variable keeps these simulations out of the fast default
 unit-test run.

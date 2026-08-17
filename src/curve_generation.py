@@ -8,7 +8,14 @@ SINGLE_POINT = "single_point"
 STRESS_SWEEP = "stress_sweep"
 DENSITY_SWEEP = "density_sweep"
 ZIGZAG_POINT = "zigzag_point"
-SUPPORTED_MODES = (SINGLE_POINT, STRESS_SWEEP, DENSITY_SWEEP, ZIGZAG_POINT)
+CYCLIC_STRESS = "cyclic_stress"
+SUPPORTED_MODES = (
+    SINGLE_POINT,
+    STRESS_SWEEP,
+    DENSITY_SWEEP,
+    ZIGZAG_POINT,
+    CYCLIC_STRESS,
+)
 
 
 @dataclass(frozen=True)
@@ -21,6 +28,7 @@ class CurveGenerationSettings:
     number_of_steps: int
     step_fraction: float = 0.5
     maximum_iterations: int = 20
+    number_of_cycles: int = 1
 
     @property
     def generation_density(self) -> float:
@@ -32,6 +40,12 @@ class CurveGenerationSettings:
             return (self.final_stress,)
         if self.mode == ZIGZAG_POINT:
             return (self.next_zigzag_stress(self.initial_stress),)
+        if self.mode == CYCLIC_STRESS:
+            return cyclic_stress_targets(
+                self.initial_stress,
+                self.final_stress,
+                self.number_of_cycles,
+            )
         return logarithmic_stress_targets(
             self.initial_stress,
             self.final_stress,
@@ -167,6 +181,40 @@ def parse_curve_generation_settings(
             maximum_iterations=maximum_iterations,
         )
 
+    if mode == CYCLIC_STRESS:
+        initial_density = _density(
+            raw_settings.get("initial_density", legacy_density),
+            "curve_generation.initial_density",
+        )
+        minimum_cyclic_stress = _stress_at_or_above_minimum(
+            _required(raw_settings, "minimum_stress"),
+            "curve_generation.minimum_stress",
+            minimum_stress,
+        )
+        maximum_cyclic_stress = _stress_at_or_above_minimum(
+            _required(raw_settings, "maximum_stress"),
+            "curve_generation.maximum_stress",
+            minimum_stress,
+        )
+        if maximum_cyclic_stress <= minimum_cyclic_stress:
+            raise ValueError(
+                "A cyclic_stress mode requires maximum_stress to be greater "
+                "than minimum_stress."
+            )
+        number_of_cycles = _positive_integer(
+            _required(raw_settings, "number_of_cycles"),
+            "curve_generation.number_of_cycles",
+        )
+        return CurveGenerationSettings(
+            mode=mode,
+            initial_density=initial_density,
+            final_density=initial_density,
+            initial_stress=minimum_cyclic_stress,
+            final_stress=maximum_cyclic_stress,
+            number_of_steps=1,
+            number_of_cycles=number_of_cycles,
+        )
+
     initial_density = _density(
         raw_settings.get("initial_density", legacy_density),
         "curve_generation.initial_density",
@@ -242,6 +290,20 @@ def logarithmic_stress_targets(
     targets = [initial_stress * ratio**step for step in range(number_of_steps + 1)]
     targets[-1] = final_stress
     return tuple(targets)
+
+
+def cyclic_stress_targets(
+    minimum_stress: float,
+    maximum_stress: float,
+    number_of_cycles: int,
+) -> tuple[float, ...]:
+    """Return the stabilized low/high endpoints for complete loading cycles."""
+    minimum_stress = _positive_number(minimum_stress, "minimum_stress")
+    maximum_stress = _positive_number(maximum_stress, "maximum_stress")
+    number_of_cycles = _positive_integer(number_of_cycles, "number_of_cycles")
+    if maximum_stress <= minimum_stress:
+        raise ValueError("maximum_stress must be greater than minimum_stress.")
+    return (minimum_stress,) + (maximum_stress, minimum_stress) * number_of_cycles
 
 
 def _required(settings: Mapping[str, Any], name: str) -> Any:

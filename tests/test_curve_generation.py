@@ -1,6 +1,7 @@
 import unittest
 
 from src.curve_generation import (
+    CYCLIC_STRESS,
     DENSITY_SWEEP,
     SINGLE_POINT,
     STRESS_SWEEP,
@@ -23,6 +24,52 @@ def input_parameters(curve_generation=None):
 
 
 class CurveGenerationSettingsTests(unittest.TestCase):
+    def test_cyclic_stress_repeats_both_stable_extremes_for_each_cycle(self):
+        settings = parse_curve_generation_settings(
+            input_parameters(
+                {
+                    "mode": CYCLIC_STRESS,
+                    "initial_density": 0.625,
+                    "minimum_stress": 12500.0,
+                    "maximum_stress": 50000.0,
+                    "number_of_cycles": 3,
+                }
+            ),
+            5000.0,
+        )
+
+        self.assertEqual(settings.mode, CYCLIC_STRESS)
+        self.assertEqual(settings.generation_density, 0.625)
+        self.assertEqual(settings.number_of_cycles, 3)
+        self.assertEqual(
+            settings.stress_targets,
+            (12500.0, 50000.0, 12500.0, 50000.0, 12500.0, 50000.0, 12500.0),
+        )
+
+    def test_cyclic_stress_rejects_invalid_extremes_and_cycle_count(self):
+        invalid_settings = (
+            {
+                "mode": CYCLIC_STRESS,
+                "minimum_stress": 50000.0,
+                "maximum_stress": 12500.0,
+                "number_of_cycles": 1,
+            },
+            {
+                "mode": CYCLIC_STRESS,
+                "minimum_stress": 12500.0,
+                "maximum_stress": 50000.0,
+                "number_of_cycles": 0,
+            },
+        )
+
+        for settings in invalid_settings:
+            with self.subTest(settings=settings):
+                with self.assertRaises(ValueError):
+                    parse_curve_generation_settings(
+                        input_parameters(settings),
+                        5000.0,
+                    )
+
     def test_missing_configuration_preserves_single_point_behavior(self):
         settings = parse_curve_generation_settings(input_parameters(), 5000.0)
 

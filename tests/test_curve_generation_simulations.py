@@ -29,6 +29,37 @@ REDUCED_DOMAIN_LENGTH = 0.084
     "Set DEMGEN_RUN_SIMULATION_TESTS=1 to run the Kratos simulation suite.",
 )
 class CurveGenerationSimulationTests(unittest.TestCase):
+    def test_cyclic_stress_saves_every_stable_minimum_and_maximum(self):
+        with self.run_simulation(
+            {
+                "mode": "cyclic_stress",
+                "initial_density": TARGET_DENSITY,
+                "minimum_stress": 12500.0,
+                "maximum_stress": 50000.0,
+                "number_of_cycles": 1,
+            },
+            density_tolerance=0.0001,
+        ) as case_dir:
+            self.assert_successful_case(case_dir)
+            self.assertEqual(
+                self.target_sequence(case_dir),
+                [12500.0, 50000.0, 12500.0],
+            )
+            self.assertEqual(self.checkpoint_rows(case_dir), 3)
+            for output_name in (
+                "inletPGDEM_cycle_000_minimum.mdpa",
+                "inletPGDEM_cycle_001_maximum.mdpa",
+                "inletPGDEM_cycle_001_minimum.mdpa",
+            ):
+                self.assertTrue((case_dir / output_name).is_file())
+            self.assert_checkpoint_stresses(
+                case_dir,
+                [12500.0, 50000.0, 12500.0],
+                STRICT_STRESS_TOLERANCE,
+            )
+            self.assert_complete_measurements(case_dir)
+            self.assert_gid_checkpoints(case_dir)
+
     def test_single_point_writes_one_complete_checkpoint(self):
         with self.run_simulation(
             {
@@ -286,6 +317,8 @@ class CurveGenerationSimulationTests(unittest.TestCase):
             )
 
         output_reader.join(timeout=5)
+        if process.stdout is not None:
+            process.stdout.close()
         output = "".join(output_lines)
         (run_dir / "simulation.log").write_text(output, encoding="utf-8")
         if process.returncode != 0:
