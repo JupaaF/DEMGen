@@ -38,7 +38,7 @@ class DEMGenPresentation(Slide):
         self.play(subtitle[1].animate.scale(0.65).to_edge(UP + LEFT), run_time=1.5)
         
         outline = Tex(": Outline", font_size=65).next_to(subtitle[1], 0.7*RIGHT)
-        self.play(Create(outline), run_time=1)
+        self.play(Create(outline), run_time=0.5)
         
         #Crear los items con arrows
         
@@ -366,8 +366,175 @@ class DEMGenPresentation(Slide):
                     run_time=1)
         
         title_slide = Title("What methods does it use?", font_size=55).to_edge(UP)
-        self.play(Transform(outline_texts[1], title_slide), FadeOut(outline_arrows[1]), run_time=0.5)
+        self.play(ReplacementTransform(outline_texts[1], title_slide), FadeOut(outline_arrows[1]), run_time=0.5)
+        self.wait()
+            
+        self.next_slide()
+        non_dem_based_label = Tex("Non-DEM-based", " methods", font_size = 55)
+        non_dem_based_label[0].set_color("#C6A64B")
+        self.play(Write(non_dem_based_label), run_time= 0.5)
+        
         self.next_slide()
         
+        constructive_label = Tex("Constructive", " methods", font_size = 55)
+        constructive_label[0].set_color("#C6A64B")
+        self.play(ReplacementTransform(non_dem_based_label, constructive_label), run_time= 0.5)
         
+        self.next_slide()
+        self.play(constructive_label.animate.shift(2*UP))
+        
+        constructive_side = 3.4
+        cubic_square = Square(side_length=constructive_side, color=WHITE)
+        cubic_rows = VGroup()
+        cubic_particles_per_side = 9
+        cubic_radius = constructive_side / (2 * cubic_particles_per_side)
+        cubic_lower_left = cubic_square.get_corner(DL)
+        for row in range(cubic_particles_per_side):
+            cubic_row = VGroup()
+            for column in range(cubic_particles_per_side):
+                cubic_row.add(
+                    Circle(
+                        radius=cubic_radius,
+                        stroke_color=BLACK,
+                        stroke_width=0.6,
+                        fill_color="#C6A64B",
+                        fill_opacity=0.92,
+                    ).move_to(
+                        cubic_lower_left
+                        + RIGHT * ((2 * column + 1) * cubic_radius)
+                        + UP * ((2 * row + 1) * cubic_radius)
+                    )
+                )
+            cubic_rows.add(cubic_row)
+
+        hpc_square = Square(side_length=constructive_side, color=WHITE)
+        hpc_particle_rows = VGroup()
+        hpc_row_count = 10
+        hpc_radius = constructive_side / 18
+        hpc_lower_left = hpc_square.get_corner(DL)
+        hpc_height = 2 * hpc_radius + (hpc_row_count - 1) * (3 ** 0.5) * hpc_radius
+        hpc_vertical_margin = (constructive_side - hpc_height) / 2
+        for row in range(hpc_row_count):
+            hpc_columns = 9 if row % 2 == 0 else 8
+            horizontal_offset = 0 if row % 2 == 0 else hpc_radius
+            hpc_row = VGroup()
+            for column in range(hpc_columns):
+                hpc_row.add(
+                    Circle(
+                        radius=hpc_radius,
+                        stroke_color=BLACK,
+                        stroke_width=0.6,
+                        fill_color="#C6A64B",
+                        fill_opacity=0.92,
+                    ).move_to(
+                        hpc_lower_left
+                        + RIGHT * (hpc_radius + horizontal_offset + 2 * column * hpc_radius)
+                        + UP * (hpc_vertical_margin + hpc_radius + row * (3 ** 0.5) * hpc_radius)
+                    )
+                )
+            hpc_particle_rows.add(hpc_row)
+            
+        hpc_particle_rows.set_z_index(0)
+        cubic_rows.set_z_index(0)
+        hpc_square.set_z_index(1)
+        cubic_square.set_z_index(1)
+
+        cubic_packing = VGroup(cubic_square, cubic_rows).move_to(LEFT * 3 + DOWN * 0.4)
+        hpc_packing = VGroup(hpc_square, hpc_particle_rows).move_to(RIGHT * 3 + DOWN * 0.4)
+        cubic_label = Tex("Cubic", font_size=40).next_to(cubic_packing, DOWN, buff=0.25)
+        hpc_label = Tex("HPC", font_size=40).next_to(hpc_packing, DOWN, buff=0.25)
+        
+        
+        
+        self.play(Create(cubic_square), Create(hpc_square))
+        row_animations = []
+        for row_index in range(max(cubic_particles_per_side, hpc_row_count)):
+            animations = []
+            if row_index < cubic_particles_per_side:
+                animations.append(DrawBorderThenFill(cubic_rows[row_index]))
+            if row_index < hpc_row_count:
+                animations.append(DrawBorderThenFill(hpc_particle_rows[row_index]))
+            row_animations.append(AnimationGroup(*animations))
+        self.play(
+            LaggedStart(*row_animations, lag_ratio=0.18),
+            run_time=3.0,
+        )
+        self.play(
+            Write(cubic_label),
+            Write(hpc_label),
+            run_time=1,
+        )
+        
+        self.next_slide()
+        
+        objects_to_remove = [
+            mobject
+            for mobject in self.mobjects
+            if mobject is not title_slide
+        ]
+        dem_based_label = Tex("DEM-based", " methods", font_size = 55).shift(LEFT * 15 + UP * 2)
+        dem_based_label[0].set_color("#C6A64B")
+        dynamic_label = Tex("Dynamic", " methods", font_size = 55).shift(UP * 2)
+        dynamic_label[0].set_color("#C6A64B")
+        self.play(
+            *[mobject.animate.shift(RIGHT * 15) for mobject in objects_to_remove],
+            dem_based_label.animate.shift(RIGHT * 15),
+            run_time=1.2,
+        )
+        self.remove(*objects_to_remove)
+        
+        self.next_slide()
+        self.play(ReplacementTransform(dem_based_label, dynamic_label), run_time=0.5)
+        
+        self.next_slide()
+        
+        table = Table(
+            [
+                ["Geometric rules", "Random"],
+                ["Low", "High"],
+                ["Low", "High"],
+                ["Limited","High"],
+                [
+                    r"\shortstack{Validation or\\test cases}",
+                    r"\shortstack{Realistic materials and\\mechanical studies}",
+                ]
+            ],
+            row_labels=[
+                Tex("Initialize"),
+                Tex("Cost"),
+                Tex("Randomness"),
+                Tex("Reality"),
+                Tex("Use")
+            ],
+            col_labels=[
+                Tex("Constructive",color="#C6A64B", font_size = 55),
+                Tex("Dynamics",color="#C6A64B", font_size = 55),
+            ],
+            top_left_entry=Tex(""),
+            element_to_mobject=Tex,
+        )
+
+        table.scale(0.75).shift(0.5*DOWN)
+
+        self.play(Create(table), run_time = 2)
+        self.wait()
+        self.next_slide()
+        
+        self.play(Indicate(table.get_row_labels()[0], color="#C6A64B"), run_time=1.2)
+        
+        self.next_slide()
+        
+        self.play(Indicate(table.get_row_labels()[1], color="#C6A64B"), run_time=1.2)
+                
+        self.next_slide()
+
+        self.play(Indicate(table.get_row_labels()[2], color="#C6A64B"), run_time=1.2)
+                
+        self.next_slide()
+
+        self.play(Indicate(table.get_row_labels()[3], color="#C6A64B"), run_time=1.2)
+                
+        self.next_slide()
+
+        self.play(Indicate(table.get_row_labels()[4], color="#C6A64B"), run_time=1.2)
         
