@@ -60,6 +60,12 @@ class DEMGenMainFramework():
             MyDEM = improved_radius_expansion_with_servo_control_method.ImprovedRadiusExpansionWithServoControlMethod()
             MyDEM.Run(self.parameters, self.ini_path, self.run_path)
 
+        elif self.parameters["generator_name"] == "cyclic_stress_controlled_method":
+
+            from dynamic_methods import cyclic_stress_controlled_method
+            MyDEM = cyclic_stress_controlled_method.CyclicStressControlledMethod()
+            MyDEM.Run(self.parameters, self.ini_path, self.run_path)
+
         elif self.parameters["generator_name"] == "cubic_arrangement_method":
 
             from constructive_methods import cubic_arrangement_method

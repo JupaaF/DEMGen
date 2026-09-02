@@ -1,0 +1,311 @@
+=== Acuario environment probe ===
+Fri Aug 21 14:56:43 CEST 2026
+acuario
+Linux acuario 3.10.0-327.18.2.el7.x86_64 #1 SMP Thu May 12 04:13:05 CDT 2016 x86_64 x86_64 x86_64 GNU/Linux
+=== Operating system ===
+NAME="Scientific Linux"
+VERSION="7.2 (Nitrogen)"
+ID="rhel"
+ID_LIKE="fedora"
+VERSION_ID="7.2"
+PRETTY_NAME="Scientific Linux 7.2 (Nitrogen)"
+ANSI_COLOR="0;31"
+CPE_NAME="cpe:/o:scientificlinux:scientificlinux:7.2:GA"
+HOME_URL="http://www.scientificlinux.org//"
+BUG_REPORT_URL="mailto:scientific-linux-devel@listserv.fnal.gov"
+
+REDHAT_BUGZILLA_PRODUCT="Scientific Linux 7"
+=== Slurm partitions ===
+PARTITION|AVAIL|TIMELIMIT|NODES|CPUS|MEMORY|GRES|NODELIST
+HighParallelization|up|10-00:00:00|8|20|128669|(null)|pez[036-043]
+HighParallelization-dev|up|1:00:00|8|20|128669|(null)|pez[036-043]
+B510|up|10-00:00:00|18|16|64213|(null)|pez[017-034]
+B510-dev|up|1:00:00|18|16|64213|(null)|pez[017-034]
+R815|up|10-00:00:00|1|64|257758|(null)|pez035
+R815-dev|up|1:00:00|1|64|257758|(null)|pez035
+R630*|up|10-00:00:00|2|16|128534|(null)|pez[045-046]
+R630-dev|up|1:00:00|2|16|128534|(null)|pez[045-046]
+R630-v4|up|10-00:00:00|1|32|386691|(null)|pez047
+HM|up|10-00:00:00|2|96|1019650|(null)|pez[048-049]
+HM-dev|up|1-00:00:00|2|96|1019650|(null)|pez[048-049]
+R182-open|up|10-00:00:00|1|128|515643|(null)|pez051
+R640|up|10-00:00:00|1|104|510598|(null)|pez052
+R6525|up|10-00:00:00|1|256|515314|(null)|pez053
+=== Slurm configuration ===
+PartitionName=HighParallelization
+   AllowGroups=ALL AllowAccounts=ALL AllowQos=ALL
+   AllocNodes=ALL Default=NO QoS=N/A
+   DefaultTime=NONE DisableRootJobs=NO ExclusiveUser=NO GraceTime=0 Hidden=NO
+   MaxNodes=UNLIMITED MaxTime=10-00:00:00 MinNodes=1 LLN=NO MaxCPUsPerNode=UNLIMITED
+   Nodes=pez[036-043]
+   PriorityJobFactor=0 PriorityTier=0 RootOnly=NO ReqResv=NO OverSubscribe=NO
+   OverTimeLimit=NONE PreemptMode=OFF
+   State=UP TotalCPUs=160 TotalNodes=8 SelectTypeParameters=NONE
+   DefMemPerNode=UNLIMITED MaxMemPerNode=UNLIMITED
+
+PartitionName=HighParallelization-dev
+   AllowGroups=ALL AllowAccounts=ALL AllowQos=ALL
+   AllocNodes=ALL Default=NO QoS=N/A
+   DefaultTime=NONE DisableRootJobs=NO ExclusiveUser=NO GraceTime=0 Hidden=NO
+   MaxNodes=UNLIMITED MaxTime=01:00:00 MinNodes=1 LLN=NO MaxCPUsPerNode=UNLIMITED
+   Nodes=pez[036-043]
+   PriorityJobFactor=1 PriorityTier=1 RootOnly=NO ReqResv=NO OverSubscribe=NO
+   OverTimeLimit=NONE PreemptMode=GANG,REQUEUE
+   State=UP TotalCPUs=160 TotalNodes=8 SelectTypeParameters=NONE
+   DefMemPerNode=UNLIMITED MaxMemPerNode=UNLIMITED
+
+PartitionName=B510
+   AllowGroups=ALL AllowAccounts=ALL AllowQos=ALL
+   AllocNodes=ALL Default=NO QoS=N/A
+   DefaultTime=NONE DisableRootJobs=NO ExclusiveUser=NO GraceTime=0 Hidden=NO
+   MaxNodes=UNLIMITED MaxTime=10-00:00:00 MinNodes=1 LLN=NO MaxCPUsPerNode=UNLIMITED
+   Nodes=pez[017-034]
+   PriorityJobFactor=0 PriorityTier=0 RootOnly=NO ReqResv=NO OverSubscribe=NO
+   OverTimeLimit=NONE PreemptMode=OFF
+   State=UP TotalCPUs=288 TotalNodes=18 SelectTypeParameters=NONE
+   DefMemPerNode=UNLIMITED MaxMemPerNode=UNLIMITED
+
+PartitionName=B510-dev
+   AllowGroups=ALL AllowAccounts=ALL AllowQos=ALL
+   AllocNodes=ALL Default=NO QoS=N/A
+   DefaultTime=NONE DisableRootJobs=NO ExclusiveUser=NO GraceTime=0 Hidden=NO
+   MaxNodes=UNLIMITED MaxTime=01:00:00 MinNodes=1 LLN=NO MaxCPUsPerNode=UNLIMITED
+   Nodes=pez[017-034]
+   PriorityJobFactor=1 PriorityTier=1 RootOnly=NO ReqResv=NO OverSubscribe=NO
+   OverTimeLimit=NONE PreemptMode=GANG,REQUEUE
+   State=UP TotalCPUs=288 TotalNodes=18 SelectTypeParameters=NONE
+   DefMemPerNode=UNLIMITED MaxMemPerNode=UNLIMITED
+
+PartitionName=R815
+   AllowGroups=ALL AllowAccounts=ALL AllowQos=ALL
+   AllocNodes=ALL Default=NO QoS=N/A
+   DefaultTime=NONE DisableRootJobs=NO ExclusiveUser=NO GraceTime=0 Hidden=NO
+   MaxNodes=UNLIMITED MaxTime=10-00:00:00 MinNodes=1 LLN=NO MaxCPUsPerNode=UNLIMITED
+   Nodes=pez035
+   PriorityJobFactor=0 PriorityTier=0 RootOnly=NO ReqResv=NO OverSubscribe=NO
+   OverTimeLimit=NONE PreemptMode=OFF
+   State=UP TotalCPUs=64 TotalNodes=1 SelectTypeParameters=NONE
+   DefMemPerNode=UNLIMITED MaxMemPerNode=UNLIMITED
+
+PartitionName=R815-dev
+   AllowGroups=ALL AllowAccounts=ALL AllowQos=ALL
+   AllocNodes=ALL Default=NO QoS=N/A
+   DefaultTime=NONE DisableRootJobs=NO ExclusiveUser=NO GraceTime=0 Hidden=NO
+   MaxNodes=UNLIMITED MaxTime=01:00:00 MinNodes=1 LLN=NO MaxCPUsPerNode=UNLIMITED
+   Nodes=pez035
+   PriorityJobFactor=1 PriorityTier=1 RootOnly=NO ReqResv=NO OverSubscribe=NO
+   OverTimeLimit=NONE PreemptMode=GANG,REQUEUE
+   State=UP TotalCPUs=64 TotalNodes=1 SelectTypeParameters=NONE
+   DefMemPerNode=UNLIMITED MaxMemPerNode=UNLIMITED
+
+PartitionName=R630
+   AllowGroups=ALL AllowAccounts=ALL AllowQos=ALL
+   AllocNodes=ALL Default=YES QoS=N/A
+   DefaultTime=NONE DisableRootJobs=NO ExclusiveUser=NO GraceTime=0 Hidden=NO
+   MaxNodes=UNLIMITED MaxTime=10-00:00:00 MinNodes=1 LLN=NO MaxCPUsPerNode=UNLIMITED
+   Nodes=pez[045-046]
+   PriorityJobFactor=0 PriorityTier=0 RootOnly=NO ReqResv=NO OverSubscribe=NO
+   OverTimeLimit=NONE PreemptMode=OFF
+   State=UP TotalCPUs=32 TotalNodes=2 SelectTypeParameters=NONE
+   DefMemPerNode=UNLIMITED MaxMemPerNode=UNLIMITED
+
+PartitionName=R630-dev
+   AllowGroups=ALL AllowAccounts=ALL AllowQos=ALL
+   AllocNodes=ALL Default=NO QoS=N/A
+   DefaultTime=NONE DisableRootJobs=NO ExclusiveUser=NO GraceTime=0 Hidden=NO
+   MaxNodes=UNLIMITED MaxTime=01:00:00 MinNodes=1 LLN=NO MaxCPUsPerNode=UNLIMITED
+   Nodes=pez[045-046]
+   PriorityJobFactor=1 PriorityTier=1 RootOnly=NO ReqResv=NO OverSubscribe=NO
+   OverTimeLimit=NONE PreemptMode=GANG,REQUEUE
+   State=UP TotalCPUs=32 TotalNodes=2 SelectTypeParameters=NONE
+   DefMemPerNode=UNLIMITED MaxMemPerNode=UNLIMITED
+
+PartitionName=R630-v4
+   AllowGroups=ALL AllowAccounts=ALL AllowQos=ALL
+   AllocNodes=ALL Default=NO QoS=N/A
+   DefaultTime=NONE DisableRootJobs=NO ExclusiveUser=NO GraceTime=0 Hidden=NO
+   MaxNodes=UNLIMITED MaxTime=10-00:00:00 MinNodes=1 LLN=NO MaxCPUsPerNode=UNLIMITED
+   Nodes=pez047
+   PriorityJobFactor=0 PriorityTier=0 RootOnly=NO ReqResv=NO OverSubscribe=NO
+   OverTimeLimit=NONE PreemptMode=GANG,REQUEUE
+   State=UP TotalCPUs=32 TotalNodes=1 SelectTypeParameters=NONE
+   DefMemPerNode=UNLIMITED MaxMemPerNode=UNLIMITED
+
+PartitionName=HM
+   AllowGroups=ALL AllowAccounts=ALL AllowQos=ALL
+   AllocNodes=ALL Default=NO QoS=N/A
+   DefaultTime=NONE DisableRootJobs=NO ExclusiveUser=NO GraceTime=0 Hidden=NO
+   MaxNodes=UNLIMITED MaxTime=10-00:00:00 MinNodes=1 LLN=NO MaxCPUsPerNode=UNLIMITED
+   Nodes=pez[048-049]
+   PriorityJobFactor=0 PriorityTier=0 RootOnly=NO ReqResv=NO OverSubscribe=NO
+   OverTimeLimit=NONE PreemptMode=OFF
+   State=UP TotalCPUs=192 TotalNodes=2 SelectTypeParameters=NONE
+   DefMemPerNode=UNLIMITED MaxMemPerNode=UNLIMITED
+
+PartitionName=HM-dev
+   AllowGroups=ALL AllowAccounts=ALL AllowQos=ALL
+   AllocNodes=ALL Default=NO QoS=N/A
+   DefaultTime=NONE DisableRootJobs=NO ExclusiveUser=NO GraceTime=0 Hidden=NO
+   MaxNodes=UNLIMITED MaxTime=1-00:00:00 MinNodes=1 LLN=NO MaxCPUsPerNode=UNLIMITED
+   Nodes=pez[048-049]
+   PriorityJobFactor=1 PriorityTier=1 RootOnly=NO ReqResv=NO OverSubscribe=NO
+   OverTimeLimit=NONE PreemptMode=GANG,REQUEUE
+   State=UP TotalCPUs=192 TotalNodes=2 SelectTypeParameters=NONE
+   DefMemPerNode=UNLIMITED MaxMemPerNode=UNLIMITED
+
+PartitionName=R182-open
+   AllowGroups=ALL AllowAccounts=ALL AllowQos=ALL
+   AllocNodes=ALL Default=NO QoS=N/A
+   DefaultTime=NONE DisableRootJobs=NO ExclusiveUser=NO GraceTime=0 Hidden=NO
+   MaxNodes=UNLIMITED MaxTime=10-00:00:00 MinNodes=1 LLN=NO MaxCPUsPerNode=UNLIMITED
+   Nodes=pez051
+   PriorityJobFactor=0 PriorityTier=0 RootOnly=NO ReqResv=NO OverSubscribe=NO
+   OverTimeLimit=NONE PreemptMode=GANG,REQUEUE
+   State=UP TotalCPUs=128 TotalNodes=1 SelectTypeParameters=NONE
+   DefMemPerNode=UNLIMITED MaxMemPerNode=UNLIMITED
+
+PartitionName=R640
+   AllowGroups=ALL AllowAccounts=ALL AllowQos=ALL
+   AllocNodes=ALL Default=NO QoS=N/A
+   DefaultTime=NONE DisableRootJobs=NO ExclusiveUser=NO GraceTime=0 Hidden=NO
+   MaxNodes=UNLIMITED MaxTime=10-00:00:00 MinNodes=1 LLN=NO MaxCPUsPerNode=UNLIMITED
+   Nodes=pez052
+   PriorityJobFactor=1 PriorityTier=1 RootOnly=NO ReqResv=NO OverSubscribe=NO
+   OverTimeLimit=NONE PreemptMode=GANG,REQUEUE
+   State=UP TotalCPUs=104 TotalNodes=1 SelectTypeParameters=NONE
+   DefMemPerNode=UNLIMITED MaxMemPerNode=UNLIMITED
+
+PartitionName=R6525
+   AllowGroups=ALL AllowAccounts=ALL AllowQos=cpu-limit32
+   AllocNodes=ALL Default=NO QoS=cpu-limit32
+   DefaultTime=NONE DisableRootJobs=NO ExclusiveUser=NO GraceTime=0 Hidden=NO
+   MaxNodes=UNLIMITED MaxTime=10-00:00:00 MinNodes=1 LLN=NO MaxCPUsPerNode=UNLIMITED
+   Nodes=pez053
+   PriorityJobFactor=0 PriorityTier=0 RootOnly=NO ReqResv=NO OverSubscribe=NO
+   OverTimeLimit=NONE PreemptMode=GANG,REQUEUE
+   State=UP TotalCPUs=256 TotalNodes=1 SelectTypeParameters=NONE
+   DefMemPerNode=UNLIMITED MaxMemPerNode=UNLIMITED
+
+=== Environment modules ===
+VERSION=3.2.10
+DATE=2012-12-21
+
+AUTOLOADPATH=undef
+BASEPREFIX="/usr/share"
+BEGINENV=99
+CACHE_AVAIL=undef
+DEF_COLLATE_BY_NUMBER=undef
+DOT_EXT=""
+EVAL_ALIAS=1
+HAS_BOURNE_FUNCS=1
+HAS_BOURNE_ALIAS=1
+HAS_TCLXLIBS=undef
+HAS_X11LIBS=1
+LMSPLIT_SIZE=1000
+MODULEPATH="/etc/modulefiles"
+MODULES_INIT_DIR="/usr/share/Modules/init"
+PREFIX="/usr/share/Modules"
+TCL_VERSION="8.5"
+TCL_PATCH_LEVEL="8.5.13"
+TMP_DIR="/tmp"
+USE_FREE=undef
+VERSION_MAGIC=1
+VERSIONPATH=undef
+WANTS_VERSIONING=0
+WITH_DEBUG_INFO=undef
+
+
+-------------------------- /globalfs/etc/modulefiles ---------------------------
+boost/1.68.0
+boost/1.78.0
+clang/3.9.1
+cmake/3.13.0
+gcc/10.2.0
+gcc/6.5.0
+gcc/7.3.0
+gcc/8.2.0
+gcc/8.3.0
+git/2.29.2
+intel/clusterStudioXE2013
+intel/oneapi2022/advisor/2022.1.0
+intel/oneapi2022/ccl/2021.6.0
+intel/oneapi2022/clck/2021.6.0
+intel/oneapi2022/compiler/2022.1.0
+intel/oneapi2022/compiler32/2022.1.0
+intel/oneapi2022/compiler-rt/2022.1.0
+intel/oneapi2022/compiler-rt32/2022.1.0
+intel/oneapi2022/dal/2021.6.0
+intel/oneapi2022/debugger/2021.6.0
+intel/oneapi2022/dev-utilities/2021.6.0
+intel/oneapi2022/dnnl/2022.1.0
+intel/oneapi2022/dnnl-cpu-gomp/2022.1.0
+intel/oneapi2022/dnnl-cpu-iomp/2022.1.0
+intel/oneapi2022/dnnl-cpu-tbb/2022.1.0
+intel/oneapi2022/dpct/2022.1.0
+intel/oneapi2022/dpl/2021.7.0
+intel/oneapi2022/icc/2022.1.0
+intel/oneapi2022/icc32/2022.1.0
+intel/oneapi2022/init_opencl/2022.1.0
+intel/oneapi2022/inspector/2022.1.0
+intel/oneapi2022/intel_ippcp_ia32/2021.6.0
+intel/oneapi2022/intel_ippcp_intel64/2021.6.0
+intel/oneapi2022/intel_ipp_ia32/2021.6.0
+intel/oneapi2022/intel_ipp_intel64/2021.6.0
+intel/oneapi2022/itac/2021.6.0
+intel/oneapi2022/mkl/2022.1.0
+intel/oneapi2022/mkl32/2022.1.0
+intel/oneapi2022/mpi/2021.6.0
+intel/oneapi2022/oclfpga/2022.1.0
+intel/oneapi2022/tbb/2021.6.0
+intel/oneapi2022/tbb32/2021.6.0
+intel/oneapi2022/vpl/2022.1.0
+intel/oneapi2022/vtune/2022.2.0
+julia/1.10.2
+julia/1.12.4
+kratos-dependencies
+llvm/7.0.1
+openmpi/2.1.6
+openmpi/3.1.0
+openmpi/3.1.0-mlnx
+openmpi/3.1.1-mlnx
+openmpi/3.1.3
+openmpi/4.1.6
+petsc/3.15.1
+petsc/3.7.6-debug
+petsc/3.7.6-release
+python/2.7.15
+python/3.12.1
+python/3.6.7
+python/3.7.1
+python/3.8.0
+python/3.9.2
+trilinos/12.10.1
+VTK/7.1.1
+VTK/9.3.0
+
+------------------------------- /etc/modulefiles -------------------------------
+mpi/compat-openmpi16-x86_64 mpi/openmpi-x86_64
+mpi/mpich-x86_64
+cmdTrace.c(713):ERROR:104: 'spider' is an unrecognized subcommand
+cmdModule.c(411):ERROR:104: 'spider' is an unrecognized subcommand
+cmdTrace.c(713):ERROR:104: 'spider' is an unrecognized subcommand
+cmdModule.c(411):ERROR:104: 'spider' is an unrecognized subcommand
+ModuleCmd_Display.c(151):ERROR:105: Unable to locate a modulefile for 'kratos/daily'
+
+No Modulefiles Currently Loaded.
+=== Python interpreters ===
+/usr/bin/python
+Python 2.7.5
+=== Kratos import with current environment ===
+/home/jpfernandez/probe_environment.sh: line 42: python3: command not found
+=== Compiler and C library ===
+ldd (GNU libc) 2.17
+gcc (GCC) 4.8.5 20150623 (Red Hat 4.8.5-28)
+=== Container runtimes ===
+apptainer: unavailable
+singularity: unavailable
+=== Storage quota ===
+Disk quotas for user jpfernandez (uid 1211): 
+     Filesystem   space   quota   limit   grace   files   quota   limit   grace
+      /dev/sdb1   2980M   5120M  10240M           35089       0       0        
+=== Probe complete ===

@@ -1,0 +1,91 @@
+=== Acuario Kratos toolchain probe ===
+Fri Aug 21 14:59:20 CEST 2026
+acuario
+gcc/6.5.0(12):ERROR:150: Module 'gcc/6.5.0' conflicts with the currently loaded module(s) 'gcc/10.2.0'
+gcc/6.5.0(12):ERROR:102: Tcl command execution failed: conflict        gcc
+
+=== Loaded modules ===
+Currently Loaded Modulefiles:
+  1) gcc/10.2.0      2) python/3.12.1   3) boost/1.78.0
+=== Module definitions ===
+-------------------------------------------------------------------
+/globalfs/etc/modulefiles/gcc/10.2.0:
+
+module-whatis	 Loads path environment variables to GCC 10.2.0 
+conflict	 gcc 
+prepend-path	 MANPATH /globalfs/opt/gcc/10.2.0/share/man/ 
+prepend-path	 PATH /globalfs/opt/gcc/10.2.0/bin/ 
+prepend-path	 INCLUDE /globalfs/opt/gcc/10.2.0/include/c++/10.2.0/ 
+prepend-path	 LD_LIBRARY_PATH /globalfs/opt/gcc/10.2.0/lib64/ 
+prepend-path	 LIBRARY_PATH /globalfs/opt/gcc/10.2.0/lib64/ 
+prepend-path	 LD_LIBRARY_PATH /globalfs/opt/gcc/10.2.0/lib/ 
+prepend-path	 LIBRARY_PATH /globalfs/opt/gcc/10.2.0/lib/ 
+setenv		 CC /globalfs/opt/gcc/10.2.0/bin/gcc 
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+/globalfs/etc/modulefiles/python/3.12.1:
+
+module-whatis	 Loads path environment variables to Python 3.12.1 
+conflict	 python 
+prepend-path	 MANPATH /globalfs/opt/python/3.12.1/share/man/ 
+prepend-path	 PATH /globalfs/opt/python/3.12.1/bin/ 
+prepend-path	 INCLUDE /globalfs/opt/python/3.12.1/include/python3.12m/ 
+prepend-path	 LD_LIBRARY_PATH /globalfs/opt/python/3.12.1/lib/ 
+prepend-path	 LIBRARY_PATH /globalfs/opt/python/3.12.1/lib/ 
+setenv		 PYTHON_LIBRARY /globalfs/opt/python/3.12.1/lib/libpython3.12m.so 
+setenv		 PYTHON_INCLUDE_DIR /globalfs/opt/python/3.12.1/include/python3.12m 
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+/globalfs/etc/modulefiles/boost/1.78.0:
+
+module-whatis	 Loads path environment variables to Boost 1.78.0 
+conflict	 boost 
+prepend-path	 LD_LIBRARY_PATH /globalfs/opt/boost/1.78.0/lib 
+prepend-path	 INCLUDE /globalfs/opt/boost/1.78.0/include 
+-------------------------------------------------------------------
+
+-------------------------------------------------------------------
+/globalfs/etc/modulefiles/cmake/3.13.0:
+
+module-whatis	 Loads path environment variables to CMake 3.13.0 
+conflict	 cmake 
+prepend-path	 MANPATH /globalfs/opt/cmake/3.13.0/man/ 
+prepend-path	 PATH /globalfs/opt/cmake/3.13.0/bin/ 
+-------------------------------------------------------------------
+
+=== Compiler ===
+/globalfs/opt/gcc/10.2.0/bin/gcc
+gcc (GCC) 10.2.0
+/globalfs/opt/gcc/10.2.0/bin/g++
+g++ (GCC) 10.2.0
+=== Python ===
+/globalfs/opt/python/3.12.1/bin/python3
+Python 3.12.1
+executable=/globalfs/opt/python/3.12.1/bin/python3
+include=/globalfs/opt/python/3.12.1/include/python3.12
+libdir=/globalfs/opt/python/3.12.1/lib
+ldlibrary=libpython3.12.so
+pip 23.2.1 from /globalfs/opt/python/3.12.1/lib/python3.12/site-packages/pip (python 3.12)
+=== Build and transfer commands ===
+cmake=/usr/local/bin/cmake
+cmake version 3.30.1
+make=/usr/bin/make
+GNU Make 3.82
+git=/usr/bin/git
+git version 1.8.3.1
+curl=/usr/bin/curl
+curl 7.29.0 (x86_64-redhat-linux-gnu) libcurl/7.29.0 NSS/3.19.1 Basic ECC zlib/1.2.7 libidn/1.28 libssh2/1.4.3
+wget=/usr/bin/wget
+GNU Wget 1.14 built on linux-gnu.
+rsync=/usr/bin/rsync
+rsync  version 3.0.9  protocol version 30
+tar=/usr/bin/tar
+tar (GNU tar) 1.26
+=== GitHub connectivity ===
+524c5a9626a4854a7c8465f3a9caac069e3dbcc4	HEAD
+=== User installation paths ===
+/home/jpfernandez/.local
+/home/jpfernandez/.local/lib/python3.12/site-packages
+=== Toolchain probe complete ===

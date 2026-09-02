@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "settings": {
+    "target_packing_density": 0.64,
+    "target_stress": 10000.0,
+    "minimum_cycle_pressure": 1000.0,
+    "maximum_cycle_pressure": 200000.0,
+    "density_tolerance": 0.002,
+    "maximum_cycles": 10000,
+    "minimum_pressure_reduction_factor": 0.9
+  },
+  "controller": {
+    "phase": "high_pressure",
+    "target_pressure": 200000.0,
+    "minimum_cycle_pressure": 1000.0,
+    "completed_cycles": 37,
+    "succeeded": false,
+    "failed": false,
+    "failure_message": null
+  },
+  "time": 2.247109999960192,
+  "restart_label": "2.24710999996",
+  "restart_files": [
+    "SpheresPart__restart_files/SpheresPart_2.24710999996.rest",
+    "RigidFacePart__restart_files/RigidFacePart_2.24710999996.rest",
+    "ClusterPart__restart_files/ClusterPart_2.24710999996.rest",
+    "DEMInletPart__restart_files/DEMInletPart_2.24710999996.rest",
+    "MappingPart__restart_files/MappingPart_2.24710999996.rest",
+    "ContactPart__restart_files/ContactPart_2.24710999996.rest"
+  ],
+  "box_bounds": {
+    "BoundingBoxMinX": -0.14464421811618886,
+    "BoundingBoxMinY": -0.14464421811618886,
+    "BoundingBoxMinZ": -0.14464421811618886,
+    "BoundingBoxMaxX": 0.14464421811618886,
+    "BoundingBoxMaxY": 0.14464421811618886,
+    "BoundingBoxMaxZ": 0.14464421811618886
+  }
+}

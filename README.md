@@ -95,6 +95,10 @@ constant-density stress sweep, or an ascending constant-stress density sweep.
 See the [curve generation configuration][curve_generation_link] for the input
 parameters and generated outputs.
 
+The independent [cyclic stress-controlled method][cyclic_stress_controlled_link]
+implements a stress-only protocol with 10,000 monodisperse particles. It does
+not use radius expansion.
+
 #### Packing Characterization
 
 If the related parameters in [ParametersDEMGen.json][ParametersDEMGen_link] are 'activated', the partcile packing characterization process will be run automatically. Those parameters are:
@@ -265,6 +269,7 @@ No liability and warranty are provided.
 [test_radius_expansion_with_servo_control_method_link]: ./example/test_radius_expansion_with_servo_control_method
 [test_improved_radius_expansion_with_servo_control_method_link]: ./example/test_improved_radius_expansion_with_servo_control_method
 [curve_generation_link]: ./docs/curve_generation.md
+[cyclic_stress_controlled_link]: ./docs/cyclic_stress_controlled_method.md
 [test_cubic_arrangement_method_link]:        ./example/test_cubic_arrangement_method
 [test_hpc_arrangement_method_link]:          ./example/test_hpc_arrangement_method
 [an_example_PDF_link]:                       ./docs/example_of_packing_characterization/all_measured_results.pdf

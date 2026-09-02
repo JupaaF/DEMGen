@@ -45,8 +45,8 @@ class DEMGenPresentation(Slide):
         subitems_outline = [Tex("What is DEMGen?", font_size=50), 
                    Tex("What methods does it use?", font_size=50), 
                    Tex("Deep dive: IRESR", font_size=50), 
-                   Tex("New method: Tapping", font_size=50), 
-                   Tex("Conclusions", font_size=50)]
+                   Tex("New method: Cyclic stress", font_size=50), 
+                   Tex("Conclusions and improvements", font_size=50)]
         arrows_outline = []
         for i, titulo in enumerate(subitems_outline):
             arrow = Arrow(start=subtitle[1].get_left() + DOWN*(i+2) + 0.5*RIGHT, 
@@ -333,8 +333,8 @@ class DEMGenPresentation(Slide):
             "What is DEMGen?",
             "What methods does it use?",
             "Deep dive: IRESR",
-            "New method: Tapping",
-            "Conclusions",
+            "New method: Cyclic stress",
+            "Conclusions and improvements",
         )
         outline_arrows = []
         outline_texts = []
@@ -1101,8 +1101,8 @@ class DEMGenPresentation(Slide):
             "What is DEMGen?",
             "What methods does it use?",
             "Deep dive: IRESR",
-            "New method: Tapping",
-            "Conclusions",
+            "New method: Cyclic stress",
+            "Conclusions and improvements",
         )
         outline_arrows = []
         outline_texts = []
@@ -1881,6 +1881,7 @@ class DEMGenPresentation(Slide):
         )
         cyclic_compression_ratios = (0.993, 1.006, 0.993, 1.006, 0.993, 1.006)
         sweep_stress_number.add_updater(update_cyclic_stress)
+        completed_cyclic_segments = []
 
         def transformed_cyclic_packing(ratio):
             packing_center = servo_container.get_center()
@@ -1921,7 +1922,2200 @@ class DEMGenPresentation(Slide):
             completed_segment = segment_trace.copy()
             completed_segment.clear_updaters()
             self.add(completed_segment)
+            completed_cyclic_segments.append(completed_segment)
             self.bring_to_front(single_point_marker)
         sweep_stress_number.clear_updaters()
         self.wait(0.5)
         
+        self.next_slide()
+        
+        self.play(FadeOut(boundary_graph), FadeOut(single_point_label), 
+                  FadeOut(single_point_marker), FadeOut(sweep_stress_group), 
+                  FadeOut(servo_container), FadeOut(servo_particles), 
+                  FadeOut(servo_method_label),
+                  *[FadeOut(segment) for segment in completed_cyclic_segments],
+                  run_time=0.8)
+                
+        outline_title = Tex("DEMGen", ": Outline", font_size=65).to_edge(UP + LEFT)
+        outline_title[0].set_color("#C6A64B")
+        outline_labels = (
+            "What is DEMGen?",
+            "What methods does it use?",
+            "Deep dive: IRESR",
+            "New method: Cyclic stress",
+            "Conclusions and improvements",
+        )
+        outline_arrows = []
+        outline_texts = []
+        for index, label in enumerate(outline_labels):
+            arrow = Arrow(
+                start=outline_title.get_left() + DOWN * (index + 2) + RIGHT * 0.5,
+                end=outline_title.get_left() + DOWN * (index + 2) + RIGHT,
+                color="#C6A64B",
+                buff=0,
+            )
+            text = Tex(label, font_size=50).next_to(arrow, RIGHT)
+            outline_arrows.append(arrow)
+            outline_texts.append(text)
+
+        self.play(
+            ReplacementTransform(title_slide, outline_texts[2]),
+            FadeIn(outline_title),
+            *[FadeIn(arrow) for arrow in outline_arrows[0:]],
+            *[FadeIn(text) for text in outline_texts[0:] if text is not outline_texts[2]],
+            run_time=1.2,
+        )
+        
+        self.next_slide()
+        
+        self.play(FadeOut(outline_title), 
+            *[FadeOut(titulo) for index, titulo in enumerate(outline_texts) if index != 3], 
+            *[FadeOut(arrow) for index, arrow in enumerate(outline_arrows) if index != 3],
+            run_time=1)
+        
+        title_slide = Title("New method: Cyclic stress", font_size=55).to_edge(UP)
+        self.play(ReplacementTransform(outline_texts[3], title_slide), FadeOut(outline_arrows[3]), run_time=0.5)
+        self.wait()
+
+        # Cyclic stress, slide 1: contrast the two initial-packing strategies.
+        comparison_subtitle = Tex(
+            "Two different starting points",
+            font_size=34,
+            color=GREY_B,
+        ).next_to(title_slide, DOWN, buff=0.22)
+
+        comparison_side = 3.85
+        old_center = LEFT * 3.45 + DOWN * 0.3
+        cyclic_center = RIGHT * 3.45 + DOWN * 0.3
+        old_container = Square(
+            side_length=comparison_side,
+            color=BLUE_B,
+            stroke_width=3,
+        ).move_to(old_center + DOWN *0.5)
+        cyclic_container = Square(
+            side_length=comparison_side,
+            color="#C6A64B",
+            stroke_width=3,
+        ).move_to(cyclic_center + DOWN* 0.5)
+
+        versus_label = Text("VS", font_size=30, weight=BOLD, color=GREY_A).move_to(
+            (old_container.get_right() + cyclic_container.get_left()) / 2
+        )
+
+        old_lower_left = old_container.get_corner(DL)
+        old_initial_particles = VGroup()
+        for particle in particles:
+            x = float(particle["x"])
+            y = float(particle["y"])
+            radius = float(particle["radius"])
+            old_initial_particles.add(
+                Circle(
+                    radius=radius * comparison_side,
+                    stroke_color=BLACK,
+                    stroke_width=0.45,
+                    fill_color=BLUE_D,
+                    fill_opacity=0.95,
+                ).move_to(
+                    old_lower_left
+                    + RIGHT * (x * comparison_side)
+                    + UP * (y * comparison_side)
+                )
+            )
+
+        # A deterministic 2D schematic of the dilute 3D initialization. The
+        # equal-size view emphasizes volume fraction, not the literal 10,000
+        # particles, which would be illegible on a slide.
+        dilute_rng = np.random.default_rng(231016114)
+        dilute_grid_size = 8
+        dilute_radius = comparison_side * np.sqrt(
+            0.05 / (dilute_grid_size**2 * PI)
+        )
+        cyclic_lower_left = cyclic_container.get_corner(DL)
+        cyclic_initial_particles = VGroup()
+        for row in range(dilute_grid_size):
+            for column in range(dilute_grid_size):
+                cell_x = (column + 0.5) / dilute_grid_size
+                cell_y = (row + 0.5) / dilute_grid_size
+                jitter_x, jitter_y = dilute_rng.uniform(-0.24, 0.24, size=2)
+                x = cell_x + jitter_x / dilute_grid_size
+                y = cell_y + jitter_y / dilute_grid_size
+                cyclic_initial_particles.add(
+                    Circle(
+                        radius=dilute_radius,
+                        stroke_color=BLACK,
+                        stroke_width=0.45,
+                        fill_color="#C6A64B",
+                        fill_opacity=0.95,
+                    ).move_to(
+                        cyclic_lower_left
+                        + RIGHT * (x * comparison_side)
+                        + UP * (y * comparison_side)
+                    )
+                )
+
+        old_density_badge = VGroup(
+            RoundedRectangle(
+                width=2.55,
+                height=0.52,
+                corner_radius=0.12,
+                stroke_color=BLUE_B,
+                fill_color=BLACK,
+                fill_opacity=0.82,
+            ),
+            Tex(r"High target $\phi$", font_size=26, color=BLUE_A),
+        )
+        old_density_badge[1].move_to(old_density_badge[0])
+        old_density_badge.move_to(old_container.get_bottom() + UP * 0.42)
+
+        cyclic_density_badge = VGroup(
+            RoundedRectangle(
+                width=3.1,
+                height=0.52,
+                corner_radius=0.12,
+                stroke_color="#C6A64B",
+                fill_color=BLACK,
+                fill_opacity=0.82,
+            ),
+            Tex(r"Fixed initial $\phi_0=0.05$", font_size=25, color="#E5CB78"),
+        )
+        cyclic_density_badge[1].move_to(cyclic_density_badge[0])
+        cyclic_density_badge.move_to(cyclic_container.get_bottom() + UP * 0.42)
+
+        self.play(
+            FadeIn(comparison_subtitle, shift=DOWN * 0.12),
+            FadeIn(versus_label, scale=0.7),
+            Create(old_container),
+            Create(cyclic_container),
+            run_time=1.0,
+        )
+        self.play(
+            LaggedStart(
+                *[FadeIn(particle, scale=0.45) for particle in old_initial_particles],
+                lag_ratio=0.012,
+            ),
+            run_time=2.2,
+        )
+        self.play(
+            FadeIn(old_density_badge, shift=UP * 0.1),
+            # FadeIn(old_explanation, shift=UP * 0.1),
+            run_time=0.65,
+        )
+        self.play(
+            LaggedStart(
+                *[
+                    FadeIn(particle, scale=0.35)
+                    for particle in cyclic_initial_particles
+                ],
+                lag_ratio=0.018,
+            ),
+            run_time=2.0,
+        )
+        self.play(
+            FadeIn(cyclic_density_badge, shift=UP * 0.1),
+            # FadeIn(cyclic_explanation, shift=UP * 0.1),
+            run_time=0.65,
+        )
+        self.bring_to_front(old_container, cyclic_container)
+        self.wait(0.8)
+        self.next_slide()
+
+        # Cyclic stress, slide 2: the old generator discovers the particle
+        # count while filling the requested domain; the new one fixes N.
+        old_particle_count_badge = VGroup(
+            RoundedRectangle(
+                width=3.15,
+                height=0.52,
+                corner_radius=0.12,
+                stroke_color=BLUE_B,
+                fill_color=BLACK,
+                fill_opacity=0.82,
+            ),
+            Tex(r"$N$ varies with target $\phi$", font_size=23, color=BLUE_A),
+        )
+        old_particle_count_badge[1].move_to(old_particle_count_badge[0])
+        old_particle_count_badge.move_to(old_density_badge)
+
+        cyclic_particle_count_badge = VGroup(
+            RoundedRectangle(
+                width=2.55,
+                height=0.52,
+                corner_radius=0.12,
+                stroke_color="#C6A64B",
+                fill_color=BLACK,
+                fill_opacity=0.82,
+            ),
+            Tex(r"Always $N=10^4$", font_size=25, color="#E5CB78"),
+        )
+        cyclic_particle_count_badge[1].move_to(cyclic_particle_count_badge[0])
+        cyclic_particle_count_badge.move_to(cyclic_density_badge)
+
+        self.play(
+            ReplacementTransform(old_density_badge, old_particle_count_badge),
+            ReplacementTransform(
+                cyclic_density_badge,
+                cyclic_particle_count_badge,
+            ),
+            run_time=0.8,
+        )
+        self.play(
+            Indicate(old_initial_particles, color=BLUE_A, scale_factor=1.015),
+            Indicate(
+                cyclic_initial_particles,
+                color="#E5CB78",
+                scale_factor=1.04,
+            ),
+            run_time=1.2,
+        )
+        self.bring_to_front(
+            old_particle_count_badge,
+            cyclic_particle_count_badge,
+        )
+        self.wait(0.6)
+        self.next_slide()
+
+        # Cyclic stress, slide 3: the old method receives a fixed domain,
+        # whereas the cyclic initializer computes a box from N, r and phi_0.
+        old_box_badge = VGroup(
+            RoundedRectangle(
+                width=2.95,
+                height=0.52,
+                corner_radius=0.12,
+                stroke_color=BLUE_B,
+                fill_color=BLACK,
+                fill_opacity=0.82,
+            ),
+            Tex("Fixed box dimensions", font_size=25, color=BLUE_A),
+        )
+        old_box_badge[1].move_to(old_box_badge[0])
+        old_box_badge.move_to(old_particle_count_badge)
+
+        cyclic_box_badge = VGroup(
+            RoundedRectangle(
+                width=3.05,
+                height=0.52,
+                corner_radius=0.12,
+                stroke_color="#C6A64B",
+                fill_color=BLACK,
+                fill_opacity=0.82,
+            ),
+            Tex("Adaptive box dimensions", font_size=25, color="#E5CB78"),
+        )
+        cyclic_box_badge[1].move_to(cyclic_box_badge[0])
+        cyclic_box_badge.move_to(cyclic_particle_count_badge)
+
+        self.play(
+            ReplacementTransform(old_particle_count_badge, old_box_badge),
+            ReplacementTransform(cyclic_particle_count_badge, cyclic_box_badge),
+            run_time=0.8,
+        )
+        self.play(Indicate(old_container, color=BLUE_A), run_time=0.7)
+
+        cyclic_box_expansion = 1.1
+        expanded_cyclic_container = cyclic_container.copy().scale(
+            cyclic_box_expansion,
+            about_point=cyclic_center,
+        )
+        expanded_cyclic_particles = VGroup(
+            *[
+                particle.copy().move_to(
+                    cyclic_center
+                    + cyclic_box_expansion
+                    * (particle.get_center() - cyclic_center)
+                )
+                for particle in cyclic_initial_particles
+            ]
+        )
+        self.play(
+            Transform(cyclic_container, expanded_cyclic_container),
+            Transform(cyclic_initial_particles, expanded_cyclic_particles),
+            run_time=1.4,
+            rate_func=smooth,
+        )
+        self.bring_to_front(old_container, cyclic_container)
+        self.bring_to_front(old_box_badge, cyclic_box_badge)
+        self.wait(0.8)
+        self.next_slide()
+
+        # Cyclic stress, slide 4: revisit the pressure-density map and show
+        # progressively faster stress cycles with live counters.
+        cyclic_overview_subtitle = Tex(
+            "Accelerating cyclic stress",
+            font_size=34,
+            color=GREY_B,
+        ).move_to(comparison_subtitle)
+        cyclic_overview_graph = boundary_graph.copy().set_opacity(1)
+        cyclic_overview_graph[5].set_fill(opacity=0)
+        cyclic_overview_graph[6].set_fill(opacity=0)
+
+        cycle_minimum_stress = 1.0
+        cycle_maximum_stress = 200.0
+        cycle_target_stress = 10.0
+        cycle_initial_density = 60.0
+        cycle_target_density = 64.0
+        cycle_marker = Dot(
+            boundary_axes.c2p(
+                np.log10(cycle_minimum_stress),
+                cycle_initial_density,
+            ),
+            radius=0.1,
+            color=BLUE,
+        )
+
+        cycle_tracker = ValueTracker(0.0)
+        overview_stress_tracker = ValueTracker(cycle_minimum_stress)
+        cycle_counter_label = Tex("Cycles =", font_size=31)
+        cycle_counter_number = DecimalNumber(
+            0,
+            num_decimal_places=0,
+            font_size=34,
+            color="#E5CB78",
+        )
+        stress_counter_label = Tex("Stress =", font_size=31)
+        stress_counter_number = DecimalNumber(
+            cycle_minimum_stress,
+            num_decimal_places=1,
+            font_size=34,
+            color=BLUE_A,
+        )
+        stress_counter_unit = Tex("kPa", font_size=29)
+
+        cycle_counter_row = VGroup(
+            cycle_counter_label,
+            cycle_counter_number,
+        ).arrange(RIGHT, buff=0.16)
+        stress_counter_row = VGroup(
+            stress_counter_label,
+            stress_counter_number,
+            stress_counter_unit,
+        ).arrange(RIGHT, buff=0.14)
+        target_stress_row = VGroup(
+            Tex("Target stress =", font_size=27),
+            DecimalNumber(
+                cycle_target_stress,
+                num_decimal_places=1,
+                font_size=29,
+                color=BLUE_A,
+            ),
+            Tex("kPa", font_size=25),
+        ).arrange(RIGHT, buff=0.12)
+        target_density_row = VGroup(
+            Tex("Target density =", font_size=27),
+            DecimalNumber(
+                cycle_target_density / 100.0,
+                num_decimal_places=2,
+                font_size=29,
+                color=BLUE_A,
+            ),
+        ).arrange(RIGHT, buff=0.12)
+        friction_status_label = Tex(
+            r"\shortstack[l]{Friction coefficient remains unchanged\\throughout the entire run}",
+            font_size=24,
+            color=GREEN,
+        )
+        cyclic_counter_panel = VGroup(
+            Tex("Cyclic stress control", font_size=34, color="#C6A64B"),
+            cycle_counter_row,
+            stress_counter_row,
+            target_stress_row,
+            target_density_row,
+            friction_status_label,
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.30)
+        cyclic_counter_panel.move_to(RIGHT * 3.75)
+
+        def update_cycle_counter(number):
+            number.set_value(cycle_tracker.get_value())
+            number.next_to(cycle_counter_label, RIGHT, buff=0.16)
+
+        def update_overview_stress(number):
+            number.set_value(overview_stress_tracker.get_value())
+            number.next_to(stress_counter_label, RIGHT, buff=0.14)
+            stress_counter_unit.next_to(number, RIGHT, buff=0.14)
+
+        cycle_counter_number.add_updater(update_cycle_counter)
+        stress_counter_number.add_updater(update_overview_stress)
+
+        self.play(
+            ReplacementTransform(comparison_subtitle, cyclic_overview_subtitle),
+            FadeOut(versus_label),
+            FadeOut(old_container),
+            FadeOut(cyclic_container),
+            FadeOut(old_initial_particles),
+            FadeOut(cyclic_initial_particles),
+            FadeOut(old_box_badge),
+            FadeOut(cyclic_box_badge),
+            FadeIn(cyclic_overview_graph, shift=LEFT * 0.15),
+            FadeIn(cyclic_counter_panel, shift=LEFT * 0.15),
+            FadeIn(cycle_marker, scale=0.45),
+            run_time=1.0,
+        )
+
+        cycle_count = 100
+        accelerating_cycle_count = 80
+        acceleration_tracker = ValueTracker(0.0)
+        acceleration_strength = 3.2
+        acceleration_phase_end = 0.60
+        deceleration_power = 2.0
+
+        def density_after_cycles(completed_cycles):
+            normalized_compaction = (
+                1.0 - np.exp(-completed_cycles / 24.0)
+            ) / (1.0 - np.exp(-cycle_count / 24.0))
+            return cycle_initial_density + (
+                cycle_target_density - cycle_initial_density
+            ) * normalized_compaction
+
+        def update_accelerating_cycle(marker):
+            normalized_time = acceleration_tracker.get_value()
+            if normalized_time <= acceleration_phase_end:
+                acceleration_progress = (
+                    normalized_time / acceleration_phase_end
+                )
+                cycle_progress = accelerating_cycle_count * np.expm1(
+                    acceleration_strength * acceleration_progress
+                ) / np.expm1(acceleration_strength)
+            else:
+                deceleration_progress = (
+                    normalized_time - acceleration_phase_end
+                ) / (1.0 - acceleration_phase_end)
+                remaining_cycles = cycle_count - accelerating_cycle_count
+                cycle_progress = accelerating_cycle_count + remaining_cycles * (
+                    1.0
+                    - (1.0 - deceleration_progress) ** deceleration_power
+                )
+            cycle_progress = min(cycle_count, cycle_progress)
+            completed_cycles = min(int(np.floor(cycle_progress)), cycle_count)
+            cycle_tracker.set_value(completed_cycles)
+
+            if completed_cycles == cycle_count:
+                marker.move_to(
+                    boundary_axes.c2p(
+                        np.log10(cycle_target_stress),
+                        cycle_target_density,
+                    )
+                )
+                overview_stress_tracker.set_value(cycle_target_stress)
+                return
+
+            cycle_number = completed_cycles + 1
+            local_progress = cycle_progress - completed_cycles
+            low_start = boundary_axes.c2p(
+                np.log10(cycle_minimum_stress),
+                density_after_cycles(completed_cycles),
+            )
+            low_end_density = density_after_cycles(cycle_number)
+            high_density = low_end_density + 0.55 * np.exp(
+                -cycle_number / 55.0
+            ) + 0.18
+            high_point = boundary_axes.c2p(
+                np.log10(cycle_maximum_stress),
+                high_density,
+            )
+            final_leg_stress = (
+                cycle_target_stress
+                if cycle_number == cycle_count
+                else cycle_minimum_stress
+            )
+            low_end = boundary_axes.c2p(
+                np.log10(final_leg_stress),
+                low_end_density,
+            )
+
+            if local_progress < 0.5:
+                leg_progress = 2.0 * local_progress
+                marker.move_to(
+                    interpolate(low_start, high_point, leg_progress)
+                    + UP * 0.12 * np.sin(PI * leg_progress)
+                )
+                log_stress = interpolate(
+                    np.log10(cycle_minimum_stress),
+                    np.log10(cycle_maximum_stress),
+                    leg_progress,
+                )
+            else:
+                leg_progress = 2.0 * local_progress - 1.0
+                marker.move_to(
+                    interpolate(high_point, low_end, leg_progress)
+                    + DOWN * 0.12 * np.sin(PI * leg_progress)
+                )
+                log_stress = interpolate(
+                    np.log10(cycle_maximum_stress),
+                    np.log10(final_leg_stress),
+                    leg_progress,
+                )
+            overview_stress_tracker.set_value(10**log_stress)
+
+        cycle_marker.add_updater(update_accelerating_cycle)
+        self.bring_to_front(cycle_marker, cyclic_counter_panel)
+        self.play(
+            acceleration_tracker.animate.set_value(1.0),
+            run_time=18.0,
+            rate_func=linear,
+        )
+        cycle_marker.clear_updaters()
+
+        cycle_counter_number.clear_updaters()
+        stress_counter_number.clear_updaters()
+        self.wait(0.7)
+        self.next_slide()
+
+        # Measured pressure and density histories for Acuario job 266688.
+        # Keep the section title, but replace every other object from the
+        # previous slide before drawing the two plots natively in Manim.
+        objects_to_remove = [
+            mobject for mobject in self.mobjects if mobject is not title_slide
+        ]
+        self.play(
+            *[FadeOut(mobject) for mobject in objects_to_remove],
+            run_time=0.8,
+        )
+        self.remove(*objects_to_remove)
+
+        history_path = (
+            Path(__file__).resolve().parents[1]
+            / "hpc"
+            / "acuario"
+            / "results"
+            / "266688"
+            / "pressure_density_history.csv"
+        )
+        with history_path.open(newline="", encoding="utf-8") as history_file:
+            history_rows = list(csv.DictReader(history_file))
+
+        history_times = np.array(
+            [float(row["simulation_time_s"]) for row in history_rows]
+        )
+        history_log_pressures = np.log10(
+            np.maximum(
+                np.array([float(row["pressure_kpa"]) for row in history_rows]),
+                1e-6,
+            )
+        )
+        history_densities = np.array(
+            [float(row["density"]) for row in history_rows]
+        )
+
+        history_time_min = 0.4
+        history_time_max = 2.2
+        pressure_log_min = -1.0
+        pressure_log_max = 2.4
+        density_min = 0.564
+        density_max = 0.642
+        plot_center_x = -2.15
+        plot_width = 8.0
+        plot_height = 2.15
+
+        pressure_history_axes = Axes(
+            x_range=[history_time_min, history_time_max, 0.5],
+            y_range=[pressure_log_min, pressure_log_max, 1.0],
+            x_length=plot_width,
+            y_length=plot_height,
+            axis_config={
+                "color": GREY_B,
+                "stroke_width": 1.6,
+                "include_ticks": True,
+                "tick_size": 0.05,
+            },
+            tips=False,
+        ).move_to([plot_center_x, 1.25, 0])
+        density_history_axes = Axes(
+            x_range=[history_time_min, history_time_max, 0.5],
+            y_range=[density_min, density_max, 0.02],
+            x_length=plot_width,
+            y_length=plot_height,
+            axis_config={
+                "color": GREY_B,
+                "stroke_width": 1.6,
+                "include_ticks": True,
+                "tick_size": 0.05,
+            },
+            tips=False,
+        ).move_to([plot_center_x, -1.55, 0])
+
+        history_time_ticks = (0.5, 1.0, 1.5, 2.0)
+        pressure_log_ticks = (-1, 0, 1, 2)
+        density_ticks = (0.57, 0.59, 0.61, 0.64)
+        history_grids = VGroup(
+            *[
+                Line(
+                    pressure_history_axes.c2p(time_value, pressure_log_min),
+                    pressure_history_axes.c2p(time_value, pressure_log_max),
+                    color=GREY_D,
+                    stroke_width=1,
+                    stroke_opacity=0.28,
+                )
+                for time_value in history_time_ticks
+            ],
+            *[
+                Line(
+                    pressure_history_axes.c2p(history_time_min, pressure_value),
+                    pressure_history_axes.c2p(history_time_max, pressure_value),
+                    color=GREY_D,
+                    stroke_width=1,
+                    stroke_opacity=0.28,
+                )
+                for pressure_value in pressure_log_ticks
+            ],
+            *[
+                Line(
+                    density_history_axes.c2p(time_value, density_min),
+                    density_history_axes.c2p(time_value, density_max),
+                    color=GREY_D,
+                    stroke_width=1,
+                    stroke_opacity=0.28,
+                )
+                for time_value in history_time_ticks
+            ],
+            *[
+                Line(
+                    density_history_axes.c2p(history_time_min, density_value),
+                    density_history_axes.c2p(history_time_max, density_value),
+                    color=GREY_D,
+                    stroke_width=1,
+                    stroke_opacity=0.28,
+                )
+                for density_value in density_ticks
+            ],
+        )
+
+        pressure_tick_labels = VGroup(
+            *[
+                MathTex(rf"10^{{{pressure_value}}}", font_size=19).next_to(
+                    pressure_history_axes.c2p(history_time_min, pressure_value),
+                    LEFT,
+                    buff=0.10,
+                )
+                for pressure_value in pressure_log_ticks
+            ]
+        )
+        density_tick_labels = VGroup(
+            *[
+                DecimalNumber(
+                    density_value,
+                    num_decimal_places=2,
+                    font_size=18,
+                ).next_to(
+                    density_history_axes.c2p(history_time_min, density_value),
+                    LEFT,
+                    buff=0.10,
+                )
+                for density_value in density_ticks
+            ]
+        )
+        history_time_labels = VGroup(
+            *[
+                DecimalNumber(
+                    time_value,
+                    num_decimal_places=1,
+                    font_size=18,
+                ).next_to(
+                    density_history_axes.c2p(time_value, density_min),
+                    DOWN,
+                    buff=0.10,
+                )
+                for time_value in history_time_ticks
+            ]
+        )
+
+        pressure_axis_label = Tex("Pressure [kPa]", font_size=23).rotate(PI / 2)
+        pressure_axis_label.next_to(pressure_history_axes, LEFT, buff=0.58)
+        density_axis_label = Tex("Packing density [-]", font_size=23).rotate(PI / 2)
+        density_axis_label.next_to(density_history_axes, LEFT, buff=0.58)
+        history_time_axis_label = Tex("Simulation time [s]", font_size=23)
+        history_time_axis_label.next_to(density_history_axes, DOWN, buff=0.46)
+
+        pressure_history_curve = VMobject(
+            stroke_color=BLUE_C,
+            stroke_width=2.4,
+        ).set_points_as_corners(
+            [
+                pressure_history_axes.c2p(time_value, pressure_value)
+                for time_value, pressure_value in zip(
+                    history_times,
+                    history_log_pressures,
+                )
+            ]
+        ).set_z_index(1)
+        density_history_curve = VMobject(
+            stroke_color=TEAL_C,
+            stroke_width=2.4,
+        ).set_points_as_corners(
+            [
+                density_history_axes.c2p(time_value, density_value)
+                for time_value, density_value in zip(
+                    history_times,
+                    history_densities,
+                )
+            ]
+        ).set_z_index(1)
+
+        pressure_target_start = pressure_history_axes.c2p(
+            history_time_min,
+            np.log10(10.0),
+        )
+        pressure_target_end = pressure_history_axes.c2p(
+            history_time_max,
+            np.log10(10.0),
+        )
+        density_target_start = density_history_axes.c2p(
+            history_time_min,
+            0.64,
+        )
+        density_target_end = density_history_axes.c2p(
+            history_time_max,
+            0.64,
+        )
+        pressure_target_shadow = DashedLine(
+            pressure_target_start,
+            pressure_target_end,
+            dash_length=0.10,
+            color=BLACK,
+            stroke_width=6,
+        ).set_z_index(9)
+        density_target_shadow = DashedLine(
+            density_target_start,
+            density_target_end,
+            dash_length=0.10,
+            color=BLACK,
+            stroke_width=6,
+        ).set_z_index(9)
+        pressure_target_line = DashedLine(
+            pressure_target_start,
+            pressure_target_end,
+            dash_length=0.10,
+            color=RED_A,
+            stroke_width=3.2,
+        ).set_z_index(10)
+        density_target_line = DashedLine(
+            density_target_start,
+            density_target_end,
+            dash_length=0.10,
+            color=RED_A,
+            stroke_width=3.2,
+        ).set_z_index(10)
+        pressure_target_label = Tex(
+            "Target pressure: 10 kPa",
+            font_size=18,
+            color=RED_A,
+        ).next_to(pressure_target_line.get_right(), UP + LEFT, buff=0.10).set_z_index(12)
+        density_target_label = Tex(
+            "Target density: 0.64",
+            font_size=18,
+            color=RED_A,
+        ).next_to(density_target_line.get_right(), DOWN + LEFT, buff=0.10).set_z_index(12)
+        pressure_target_label_background = SurroundingRectangle(
+            pressure_target_label,
+            buff=0.07,
+            stroke_width=0,
+            fill_color=BLACK,
+            fill_opacity=0.94,
+        ).set_z_index(11)
+        density_target_label_background = SurroundingRectangle(
+            density_target_label,
+            buff=0.07,
+            stroke_width=0,
+            fill_color=BLACK,
+            fill_opacity=0.94,
+        ).set_z_index(11)
+
+        runtime_percentage = Tex(r"$57\%$", font_size=72, color="#E5CB78")
+        runtime_explanation = Tex(
+            r"\shortstack{of runtime is spent at\\low pressures, waiting\\for stability}",
+            font_size=28,
+        )
+        runtime_label_content = VGroup(
+            runtime_percentage,
+            runtime_explanation,
+        ).arrange(DOWN, buff=0.22)
+        runtime_label_box = RoundedRectangle(
+            width=3.75,
+            height=2.55,
+            corner_radius=0.16,
+            stroke_color="#C6A64B",
+            stroke_width=2.5,
+            fill_color=BLACK,
+            fill_opacity=0.82,
+        )
+        runtime_label = VGroup(runtime_label_box, runtime_label_content)
+        runtime_label_content.move_to(runtime_label_box)
+        runtime_label.move_to(RIGHT * 4.55 + DOWN * 0.15)
+
+        history_axes_group = VGroup(
+            history_grids,
+            pressure_history_axes,
+            density_history_axes,
+            pressure_tick_labels,
+            density_tick_labels,
+            history_time_labels,
+            pressure_axis_label,
+            density_axis_label,
+            history_time_axis_label,
+        )
+        self.play(FadeIn(history_axes_group), run_time=1.0)
+        self.play(
+            Create(pressure_history_curve),
+            Create(density_history_curve),
+            run_time=3.0,
+            rate_func=linear,
+        )
+        target_foreground_objects = (
+            pressure_target_shadow,
+            density_target_shadow,
+            pressure_target_line,
+            density_target_line,
+            pressure_target_label_background,
+            density_target_label_background,
+            pressure_target_label,
+            density_target_label,
+        )
+        self.play(
+            *[FadeIn(mobject) for mobject in target_foreground_objects],
+            run_time=0.45,
+        )
+        self.add_foreground_mobjects(*target_foreground_objects)
+        self.play(FadeIn(runtime_label, shift=LEFT * 0.18), run_time=0.8)
+        self.wait(0.8)
+        self.next_slide()
+
+        # Empty comparison slide, ready for the advantages and disadvantages.
+        self.remove_foreground_mobjects(*target_foreground_objects)
+        cyclic_stress_slide_objects = [
+            mobject for mobject in self.mobjects if mobject is not title_slide
+        ]
+        self.play(
+            *[FadeOut(mobject) for mobject in cyclic_stress_slide_objects],
+            run_time=0.8,
+        )
+        self.remove(*cyclic_stress_slide_objects)
+
+        pros_panel = RoundedRectangle(
+            width=5.75,
+            height=4.75,
+            corner_radius=0.18,
+            stroke_color=GREEN_C,
+            stroke_width=2.5,
+            fill_color=BLACK,
+            fill_opacity=0.30,
+        ).move_to(LEFT * 3.15 + DOWN * 0.55)
+        cons_panel = RoundedRectangle(
+            width=5.75,
+            height=4.75,
+            corner_radius=0.18,
+            stroke_color=RED_C,
+            stroke_width=2.5,
+            fill_color=BLACK,
+            fill_opacity=0.30,
+        ).move_to(RIGHT * 3.15 + DOWN * 0.55)
+
+        pros_heading = Tex("Pros", font_size=48, color=GREEN_A)
+        cons_heading = Tex("Cons", font_size=48, color=RED_A)
+        pros_heading.move_to(pros_panel.get_top() + DOWN * 0.55)
+        cons_heading.move_to(cons_panel.get_top() + DOWN * 0.55)
+
+        pros_divider = Line(
+            pros_panel.get_left() + RIGHT * 0.28 + UP * 1.25,
+            pros_panel.get_right() + LEFT * 0.28 + UP * 1.25,
+            color=GREEN_C,
+            stroke_width=1.5,
+        )
+        cons_divider = Line(
+            cons_panel.get_left() + RIGHT * 0.28 + UP * 1.25,
+            cons_panel.get_right() + LEFT * 0.28 + UP * 1.25,
+            color=RED_C,
+            stroke_width=1.5,
+        )
+
+        pros_text = [
+            Tex(r"No artificial modification of $\mu$", font_size=29),
+            Tex("More physically realistic", font_size=29),
+            Tex(
+                r"\shortstack[l]{Helps particles rearrange into\\denser configurations}",
+                font_size=29,
+            ),
+        ]
+        pros_items = VGroup(
+            *[
+                VGroup(
+                    Dot(radius=0.065, color=GREEN_A),
+                    item,
+                ).arrange(RIGHT, buff=0.22)
+                for item in pros_text
+            ]
+        ).arrange(DOWN, buff=0.58, aligned_edge=LEFT)
+        pros_items.move_to(pros_panel.get_center() + DOWN * 0.25)
+        pros_items.align_to(pros_panel, LEFT).shift(RIGHT * 0.42)
+
+        cons_text = [
+            Tex("Very slow", font_size=29),
+            Tex(
+                r"\shortstack[l]{Currently lacks robust\\stability criteria}",
+                font_size=29,
+            ),
+            Tex(
+                r"\shortstack[l]{Sensitive to the selected\\cycle parameters}",
+                font_size=29,
+            ),
+        ]
+        cons_items = VGroup(
+            *[
+                VGroup(
+                    Dot(radius=0.065, color=RED_A),
+                    item,
+                ).arrange(RIGHT, buff=0.22)
+                for item in cons_text
+            ]
+        ).arrange(DOWN, buff=0.48, aligned_edge=LEFT)
+        cons_items.move_to(cons_panel.get_center() + DOWN * 0.25)
+        cons_items.align_to(cons_panel, LEFT).shift(RIGHT * 0.42)
+
+        self.play(
+            Create(pros_panel),
+            Create(cons_panel),
+            run_time=0.9,
+        )
+        self.play(
+            Write(pros_heading),
+            Write(cons_heading),
+            Create(pros_divider),
+            Create(cons_divider),
+            run_time=0.8,
+        )
+        self.play(
+            LaggedStart(
+                *[FadeIn(item, shift=RIGHT * 0.16) for item in pros_items],
+                lag_ratio=0.22,
+            ),
+            LaggedStart(
+                *[FadeIn(item, shift=RIGHT * 0.16) for item in cons_items],
+                lag_ratio=0.22,
+            ),
+            run_time=1.1,
+        )
+        self.wait(0.8)
+        self.next_slide()
+
+        conclusion_transition_objects = [
+            mobject for mobject in self.mobjects if mobject is not title_slide
+        ]
+        self.play(
+            *[FadeOut(mobject) for mobject in conclusion_transition_objects],
+            run_time=0.8,
+        )
+        self.remove(*conclusion_transition_objects)
+
+        conclusion_outline_title = Tex(
+            "DEMGen",
+            ": Outline",
+            font_size=65,
+        ).to_edge(UP + LEFT)
+        conclusion_outline_title[0].set_color("#C6A64B")
+        conclusion_outline_labels = (
+            "What is DEMGen?",
+            "What methods does it use?",
+            "Deep dive: IRESR",
+            "New method: Cyclic stress",
+            "Conclusions and improvements",
+        )
+        conclusion_outline_arrows = []
+        conclusion_outline_texts = []
+        for index, label in enumerate(conclusion_outline_labels):
+            arrow = Arrow(
+                start=conclusion_outline_title.get_left()
+                + DOWN * (index + 2)
+                + RIGHT * 0.5,
+                end=conclusion_outline_title.get_left()
+                + DOWN * (index + 2)
+                + RIGHT,
+                color="#C6A64B",
+                buff=0,
+            )
+            text = Tex(label, font_size=50).next_to(arrow, RIGHT)
+            conclusion_outline_arrows.append(arrow)
+            conclusion_outline_texts.append(text)
+
+        self.play(
+            ReplacementTransform(title_slide, conclusion_outline_texts[3]),
+            FadeIn(conclusion_outline_title),
+            *[FadeIn(arrow) for arrow in conclusion_outline_arrows],
+            *[
+                FadeIn(text)
+                for text in conclusion_outline_texts
+                if text is not conclusion_outline_texts[3]
+            ],
+            run_time=1.2,
+        )
+        self.next_slide()
+
+        self.play(
+            FadeOut(conclusion_outline_title),
+            *[
+                FadeOut(text)
+                for index, text in enumerate(conclusion_outline_texts)
+                if index != 4
+            ],
+            *[
+                FadeOut(arrow)
+                for index, arrow in enumerate(conclusion_outline_arrows)
+                if index != 4
+            ],
+            run_time=1.0,
+        )
+
+        title_slide = Title("Conclusions and improvements", font_size=55).to_edge(UP)
+        self.play(
+            ReplacementTransform(conclusion_outline_texts[4], title_slide),
+            FadeOut(conclusion_outline_arrows[4]),
+            run_time=0.5,
+        )
+        self.wait()
+        self.next_slide()
+
+        conclusions_label = Tex(
+            "Conclusions",
+            font_size=34,
+            color="#C6A64B",
+        ).next_to(title_slide, DOWN, buff=0.25)
+
+        conclusion_statements = (
+            r"\shortstack[l]{DEMGen supports both constructive and dynamic\\packing-generation strategies.}",
+            r"\shortstack[l]{Dynamic methods improve physical realism,\\but require a higher computational cost.}",
+            r"\shortstack[l]{Cyclic stress preserves $\mu$ and promotes denser\\rearrangements, but convergence remains slow.}",
+        )
+        conclusion_cards = VGroup()
+        for index, statement in enumerate(conclusion_statements, start=1):
+            number_badge = Circle(
+                radius=0.31,
+                stroke_color="#C6A64B",
+                stroke_width=2.2,
+                fill_color="#C6A64B",
+                fill_opacity=0.16,
+            )
+            number = Tex(f"{index:02d}", font_size=23, color="#E5CB78")
+            number.move_to(number_badge)
+            statement_text = Tex(statement, font_size=29)
+
+            badge = VGroup(number_badge, number)
+            statement_text.next_to(badge, RIGHT, buff=0.42)
+            conclusion_cards.add(VGroup(badge, statement_text))
+
+        conclusion_cards.arrange(DOWN, buff=0.58, aligned_edge=LEFT)
+        conclusion_cards.move_to(LEFT * 0.55 + DOWN * 0.55)
+
+        self.play(Write(conclusions_label), run_time=0.5)
+        self.play(
+            LaggedStart(
+                *[
+                    FadeIn(card, shift=RIGHT * 0.20)
+                    for card in conclusion_cards
+                ],
+                lag_ratio=0.22,
+            ),
+            run_time=1.3,
+        )
+        self.wait()
+        self.next_slide()
+
+        improvement_transition_objects = [
+            mobject for mobject in self.mobjects if mobject is not title_slide
+        ]
+        self.play(
+            *[FadeOut(mobject) for mobject in improvement_transition_objects],
+            run_time=0.7,
+        )
+        self.remove(*improvement_transition_objects)
+
+        improvements_label = Tex(
+            "Improvements",
+            font_size=34,
+            color="#C6A64B",
+        ).next_to(title_slide, DOWN, buff=0.25)
+        self.play(Write(improvements_label), run_time=0.5)
+        self.wait()
+        self.next_slide()
+
+        # Improvement 1, slide 1: test whether the initial point on the lower
+        # boundary changes the final numerical result.
+        improvement_one_transition = [
+            mobject for mobject in self.mobjects if mobject is not title_slide
+        ]
+        self.play(
+            *[FadeOut(mobject) for mobject in improvement_one_transition],
+            run_time=0.7,
+        )
+        self.remove(*improvement_one_transition)
+        title_slide.set_opacity(1)
+        self.add(title_slide)
+        self.bring_to_front(title_slide)
+
+        improvement_one_label = Tex(
+            "Improvement 1: Initial-state invariance",
+            font_size=34,
+            color="#C6A64B",
+        ).next_to(title_slide, DOWN, buff=0.25)
+
+        initial_condition_graph = boundary_graph.copy().set_opacity(1)
+        initial_condition_graph.scale(1.06)
+        initial_condition_graph.to_edge(LEFT, buff=0.50).shift(DOWN * 0.42)
+        initial_condition_graph[5].set_fill(opacity=0)
+        initial_condition_graph[6].set_fill(opacity=0)
+        initial_condition_graph[5].set_stroke(opacity=0.22)
+        initial_condition_graph[7].set_opacity(0.28)
+        initial_condition_axes = initial_condition_graph[0]
+
+        point_x_log_stress = 0.0
+        point_x_density = 59.3
+        point_y_log_stress = 1.55
+        point_y_density = (
+            59.3
+            - 0.10 * point_y_log_stress
+            + 0.36 * point_y_log_stress**2
+        )
+        initial_point_x = Dot(
+            initial_condition_axes.c2p(point_x_log_stress, point_x_density),
+            radius=0.10,
+            color=BLUE_A,
+        )
+        initial_point_y = Dot(
+            initial_condition_axes.c2p(point_y_log_stress, point_y_density),
+            radius=0.10,
+            color=GREEN_A,
+        )
+        initial_point_x_label = MathTex("X", font_size=30, color=BLUE_A)
+        initial_point_y_label = MathTex("Y", font_size=30, color=GREEN_A)
+        initial_point_x_label.next_to(initial_point_x, UP + RIGHT, buff=0.10)
+        initial_point_y_label.next_to(initial_point_y, UP, buff=0.10)
+
+        same_seed_label = Tex("Same seed", font_size=31, color="#E5CB78")
+        initial_choice_x = Tex(
+            r"$X$: minimum stress and density",
+            font_size=27,
+            color=BLUE_A,
+        )
+        initial_choice_y = Tex(
+            r"$Y$: any point on the lower boundary",
+            font_size=27,
+            color=GREEN_A,
+        )
+        history_note = Tex(
+            r"\shortstack{Only the loading history\\is different}",
+            font_size=26,
+            color=GREY_B,
+        )
+        final_equivalence = MathTex(
+            r"\mathcal{P}_{\mathrm{final}}^{(X)}",
+            r"\stackrel{?}{=}",
+            r"\mathcal{P}_{\mathrm{final}}^{(Y)}",
+            font_size=39,
+        )
+        final_equivalence[0].set_color(BLUE_A)
+        final_equivalence[2].set_color(GREEN_A)
+        initial_condition_question = VGroup(
+            same_seed_label,
+            initial_choice_x,
+            initial_choice_y,
+            history_note,
+            final_equivalence,
+        ).arrange(DOWN, buff=0.34)
+        initial_condition_question.move_to(RIGHT * 3.75 + DOWN * 0.42)
+
+        self.play(Write(improvement_one_label), run_time=0.5)
+        self.play(FadeIn(initial_condition_graph, shift=RIGHT * 0.15), run_time=0.9)
+        self.play(
+            FadeIn(initial_point_x, scale=0.6),
+            FadeIn(initial_point_y, scale=0.6),
+            Write(initial_point_x_label),
+            Write(initial_point_y_label),
+            run_time=0.7,
+        )
+        self.play(
+            LaggedStart(
+                *[
+                    FadeIn(item, shift=LEFT * 0.15)
+                    for item in initial_condition_question
+                ],
+                lag_ratio=0.16,
+            ),
+            run_time=1.3,
+        )
+        self.wait()
+        self.next_slide()
+
+        # Improvement 1, slide 2: numerical comparison and parallelization.
+        improvement_one_objects = [
+            mobject for mobject in self.mobjects if mobject is not title_slide
+        ]
+        self.play(
+            *[FadeOut(mobject) for mobject in improvement_one_objects],
+            run_time=0.7,
+        )
+        self.remove(*improvement_one_objects)
+        title_slide.set_opacity(1)
+        self.add(title_slide)
+        self.bring_to_front(title_slide)
+        self.add(title_slide[0])
+        self.bring_to_front(title_slide[0])
+        flow_title_text = Tex(
+            "Conclusions and improvements",
+            font_size=55,
+        ).move_to(title_slide[0].get_center())
+        self.add(flow_title_text)
+        self.bring_to_front(flow_title_text)
+
+        invariance_test_label = Tex(
+            "Improvement 1: Numerical experiment",
+            font_size=34,
+            color="#C6A64B",
+        ).next_to(title_slide, DOWN, buff=0.25)
+
+        def improvement_flow_node(label, width, color=GREY_B, font_size=25):
+            node_box = RoundedRectangle(
+                width=width,
+                height=0.82,
+                corner_radius=0.12,
+                stroke_color=color,
+                stroke_width=2.0,
+                fill_color=BLACK,
+                fill_opacity=0.30,
+            )
+            node_label = Tex(label, font_size=font_size)
+            node_label.move_to(node_box)
+            return VGroup(node_box, node_label)
+
+        seed_node = improvement_flow_node("Same seed", 1.75, "#C6A64B")
+        seed_node.move_to(LEFT * 5.65 + DOWN * 0.32)
+        start_x_node = improvement_flow_node(r"Start $X$", 1.65, BLUE_A)
+        start_y_node = improvement_flow_node(r"Start $Y$", 1.65, GREEN_A)
+        start_x_node.move_to(LEFT * 3.25 + UP * 0.68)
+        start_y_node.move_to(LEFT * 3.25 + DOWN * 1.32)
+        result_x_node = improvement_flow_node(r"Final $\mathcal{P}_X$", 1.95, BLUE_A)
+        result_y_node = improvement_flow_node(r"Final $\mathcal{P}_Y$", 1.95, GREEN_A)
+        result_x_node.move_to(LEFT * 0.35 + UP * 0.68)
+        result_y_node.move_to(LEFT * 0.35 + DOWN * 1.32)
+        comparison_node = improvement_flow_node(
+            "Numerical comparison",
+            2.45,
+            "#C6A64B",
+            font_size=23,
+        ).move_to(RIGHT * 2.65 + DOWN * 0.32)
+        equivalence_node = improvement_flow_node(
+            "Equivalent?",
+            1.85,
+            GREEN_A,
+            font_size=25,
+        ).move_to(RIGHT * 5.45 + DOWN * 0.32)
+
+        experiment_arrows = VGroup(
+            Arrow(seed_node.get_right(), start_x_node.get_left(), buff=0.10, color=BLUE_A),
+            Arrow(seed_node.get_right(), start_y_node.get_left(), buff=0.10, color=GREEN_A),
+            Arrow(start_x_node.get_right(), result_x_node.get_left(), buff=0.10, color=BLUE_A),
+            Arrow(start_y_node.get_right(), result_y_node.get_left(), buff=0.10, color=GREEN_A),
+            Arrow(result_x_node.get_right(), comparison_node.get_left(), buff=0.10, color=BLUE_A),
+            Arrow(result_y_node.get_right(), comparison_node.get_left(), buff=0.10, color=GREEN_A),
+            Arrow(comparison_node.get_right(), equivalence_node.get_left(), buff=0.10, color="#C6A64B"),
+        )
+        history_x_label = Tex("History X", font_size=20, color=BLUE_A)
+        history_y_label = Tex("History Y", font_size=20, color=GREEN_A)
+        history_x_label.move_to(LEFT * 1.80 + UP * 1.18)
+        history_y_label.move_to(LEFT * 1.80 + DOWN * 1.82)
+
+        parallelization_gain = Tex(
+            r"\shortstack{If equivalent: each boundary point can be computed\\independently and in parallel}",
+            font_size=31,
+            color="#E5CB78",
+        ).to_edge(DOWN, buff=0.52)
+
+        experiment_nodes = VGroup(
+            seed_node,
+            start_x_node,
+            start_y_node,
+            result_x_node,
+            result_y_node,
+            comparison_node,
+            equivalence_node,
+        )
+        self.play(Write(invariance_test_label), run_time=0.5)
+        self.play(
+            LaggedStart(
+                *[FadeIn(node, scale=0.92) for node in experiment_nodes],
+                lag_ratio=0.10,
+            ),
+            run_time=1.0,
+        )
+        self.play(
+            LaggedStart(*[GrowArrow(arrow) for arrow in experiment_arrows], lag_ratio=0.08),
+            FadeIn(history_x_label),
+            FadeIn(history_y_label),
+            run_time=1.1,
+        )
+        self.play(FadeIn(parallelization_gain, shift=UP * 0.15), run_time=0.7)
+        self.wait()
+        self.next_slide()
+
+        # Improvement 2, slide 1: store every stable packing as a checkpoint.
+        improvement_two_transition = [
+            mobject for mobject in self.mobjects if mobject is not title_slide
+        ]
+        self.play(
+            *[FadeOut(mobject) for mobject in improvement_two_transition],
+            run_time=0.7,
+        )
+        self.remove(*improvement_two_transition)
+        title_slide.set_opacity(1)
+        self.add(title_slide)
+        self.bring_to_front(title_slide)
+
+        improvement_two_label = Tex(
+            "Improvement 2: Checkpoint system",
+            font_size=34,
+            color="#C6A64B",
+        ).next_to(title_slide, DOWN, buff=0.25)
+
+        checkpoint_container = Square(
+            side_length=2.25,
+            stroke_color=WHITE,
+            stroke_width=2.5,
+        ).move_to(LEFT * 4.65 + DOWN * 0.25)
+        checkpoint_particles = VGroup()
+        checkpoint_particle_data = (
+            (-0.72, -0.66, 0.20),
+            (-0.27, -0.72, 0.24),
+            (0.22, -0.68, 0.20),
+            (0.67, -0.70, 0.22),
+            (-0.62, -0.22, 0.25),
+            (-0.08, -0.25, 0.23),
+            (0.43, -0.20, 0.25),
+            (-0.73, 0.32, 0.20),
+            (-0.30, 0.28, 0.22),
+            (0.17, 0.31, 0.25),
+            (0.67, 0.29, 0.20),
+            (-0.48, 0.72, 0.22),
+            (0.02, 0.72, 0.24),
+            (0.52, 0.70, 0.22),
+        )
+        for x_position, y_position, radius in checkpoint_particle_data:
+            checkpoint_particles.add(
+                Circle(
+                    radius=radius,
+                    stroke_color=BLACK,
+                    stroke_width=0.6,
+                    fill_color="#C6A64B",
+                    fill_opacity=0.92,
+                ).move_to(
+                    checkpoint_container.get_center()
+                    + RIGHT * x_position
+                    + UP * y_position
+                )
+            )
+        stable_packing_label = Tex("Stable packing", font_size=28)
+        stable_packing_label.next_to(checkpoint_container, DOWN, buff=0.24)
+
+        database_body = RoundedRectangle(
+            width=2.35,
+            height=2.35,
+            corner_radius=0.18,
+            stroke_color=BLUE_A,
+            stroke_width=2.4,
+            fill_color=BLUE_E,
+            fill_opacity=0.24,
+        ).move_to(DOWN * 0.25)
+        database_top = Ellipse(
+            width=2.35,
+            height=0.48,
+            stroke_color=BLUE_A,
+            stroke_width=2.4,
+            fill_color=BLACK,
+            fill_opacity=1.0,
+        ).move_to(database_body.get_top() + DOWN * 0.12)
+        database_layers = VGroup(
+            Line(LEFT * 1.02, RIGHT * 1.02, color=BLUE_D, stroke_width=1.2),
+            Line(LEFT * 1.02, RIGHT * 1.02, color=BLUE_D, stroke_width=1.2),
+        )
+        database_layers[0].move_to(database_body.get_center() + UP * 0.35)
+        database_layers[1].move_to(database_body.get_center() + DOWN * 0.38)
+        checkpoint_database = VGroup(database_body, database_top, database_layers)
+        checkpoint_database_label = Tex("Checkpoint DB", font_size=28, color=BLUE_A)
+        checkpoint_database_label.next_to(checkpoint_database, DOWN, buff=0.24)
+
+        save_checkpoint_arrow = Arrow(
+            checkpoint_container.get_right(),
+            checkpoint_database.get_left(),
+            buff=0.18,
+            color="#C6A64B",
+        )
+        save_checkpoint_label = Tex("Save", font_size=24, color="#E5CB78")
+        save_checkpoint_label.next_to(save_checkpoint_arrow, UP, buff=0.12)
+
+        metadata_title = Tex("Creation metadata", font_size=31, color="#C6A64B")
+        metadata_items = VGroup(
+            Tex(r"$\bullet$ Seed", font_size=27),
+            Tex(r"$\bullet$ Density $\phi$", font_size=27),
+            Tex(r"$\bullet$ Stress $p$", font_size=27),
+            Tex(r"$\bullet$ Friction $\mu$", font_size=27),
+            Tex(r"$\bullet$ Method and protocol", font_size=27),
+        ).arrange(DOWN, aligned_edge=LEFT, buff=0.21)
+        metadata_group = VGroup(metadata_title, metadata_items).arrange(
+            DOWN,
+            aligned_edge=LEFT,
+            buff=0.30,
+        )
+        metadata_group.move_to(RIGHT * 4.35 + DOWN * 0.25)
+        metadata_arrow = Arrow(
+            checkpoint_database.get_right(),
+            metadata_group.get_left(),
+            buff=0.20,
+            color=BLUE_A,
+        )
+        checkpoint_caption = Tex(
+            "Every stable state becomes reusable",
+            font_size=30,
+            color="#E5CB78",
+        ).to_edge(DOWN, buff=0.42)
+
+        self.play(Write(improvement_two_label), run_time=0.5)
+        self.play(
+            Create(checkpoint_container),
+            LaggedStart(
+                *[FadeIn(particle, scale=0.7) for particle in checkpoint_particles],
+                lag_ratio=0.04,
+            ),
+            Write(stable_packing_label),
+            run_time=1.1,
+        )
+        self.play(GrowArrow(save_checkpoint_arrow), FadeIn(save_checkpoint_label), run_time=0.6)
+        self.play(
+            FadeIn(checkpoint_database, shift=RIGHT * 0.12),
+            Write(checkpoint_database_label),
+            run_time=0.8,
+        )
+        self.play(
+            GrowArrow(metadata_arrow),
+            FadeIn(metadata_group, shift=LEFT * 0.15),
+            run_time=0.8,
+        )
+        self.play(FadeIn(checkpoint_caption, shift=UP * 0.12), run_time=0.6)
+        self.wait()
+        self.next_slide()
+
+        # Improvement 2, slide 2: reuse one checkpoint with many protocols.
+        checkpoint_reuse_transition = [
+            mobject for mobject in self.mobjects if mobject is not title_slide
+        ]
+        self.play(
+            *[FadeOut(mobject) for mobject in checkpoint_reuse_transition],
+            run_time=0.7,
+        )
+        self.remove(*checkpoint_reuse_transition)
+        title_slide.set_opacity(1)
+        self.add(title_slide)
+        self.bring_to_front(title_slide)
+        self.add(title_slide[0])
+        self.bring_to_front(title_slide[0])
+        reuse_title_text = Tex(
+            "Conclusions and improvements",
+            font_size=55,
+        ).move_to(UP * 3.24)
+        self.add(reuse_title_text)
+        self.bring_to_front(reuse_title_text)
+
+        checkpoint_reuse_label = Tex(
+            "Improvement 2: Reuse checkpoints",
+            font_size=34,
+            color="#C6A64B",
+        ).next_to(title_slide, DOWN, buff=0.25)
+
+        reuse_database = checkpoint_database.copy().scale(0.76)
+        reuse_database.move_to(LEFT * 5.25 + DOWN * 0.25)
+        reuse_database_label = Tex("Checkpoint DB", font_size=25, color=BLUE_A)
+        reuse_database_label.next_to(reuse_database, DOWN, buff=0.18)
+        selected_checkpoint_node = improvement_flow_node(
+            "Selected packing",
+            2.15,
+            "#C6A64B",
+            font_size=24,
+        ).move_to(LEFT * 2.85 + DOWN * 0.25)
+
+        protocol_a = improvement_flow_node("Protocol A", 1.72, BLUE_A, font_size=24)
+        protocol_b = improvement_flow_node("Protocol B", 1.72, GREEN_A, font_size=24)
+        protocol_c = improvement_flow_node("Protocol C", 1.72, RED_A, font_size=24)
+        protocol_a.move_to(UP * 1.10 + RIGHT * 0.10)
+        protocol_b.move_to(DOWN * 0.25 + RIGHT * 0.10)
+        protocol_c.move_to(DOWN * 1.60 + RIGHT * 0.10)
+        reuse_protocols = VGroup(protocol_a, protocol_b, protocol_c)
+
+        target_a = improvement_flow_node(
+            r"Target $(\phi_1,p_1)$",
+            2.30,
+            BLUE_A,
+            font_size=23,
+        ).move_to(UP * 1.10 + RIGHT * 4.55)
+        target_b = improvement_flow_node(
+            r"Target $(\phi_2,p_2)$",
+            2.30,
+            GREEN_A,
+            font_size=23,
+        ).move_to(DOWN * 0.25 + RIGHT * 4.55)
+        target_c = improvement_flow_node(
+            r"Target $(\phi_3,p_3)$",
+            2.30,
+            RED_A,
+            font_size=23,
+        ).move_to(DOWN * 1.60 + RIGHT * 4.55)
+        reuse_targets = VGroup(target_a, target_b, target_c)
+
+        database_to_checkpoint_arrow = Arrow(
+            reuse_database.get_right(),
+            selected_checkpoint_node.get_left(),
+            buff=0.12,
+            color="#C6A64B",
+        )
+        checkpoint_to_protocol_arrows = VGroup(
+            *[
+                Arrow(
+                    selected_checkpoint_node.get_right(),
+                    protocol.get_left(),
+                    buff=0.12,
+                    color=protocol[0].get_stroke_color(),
+                )
+                for protocol in reuse_protocols
+            ]
+        )
+        protocol_to_target_arrows = VGroup(
+            *[
+                Arrow(
+                    protocol.get_right(),
+                    target.get_left(),
+                    buff=0.12,
+                    color=protocol[0].get_stroke_color(),
+                )
+                for protocol, target in zip(reuse_protocols, reuse_targets)
+            ]
+        )
+        checkpoint_benefits = Tex(
+            r"Faster experiments $\bullet$ Reproducible tests $\bullet$ Fair protocol comparisons",
+            font_size=27,
+            color="#E5CB78",
+        ).to_edge(DOWN, buff=0.38)
+
+        self.play(Write(checkpoint_reuse_label), run_time=0.5)
+        self.play(
+            FadeIn(reuse_database),
+            Write(reuse_database_label),
+            GrowArrow(database_to_checkpoint_arrow),
+            FadeIn(selected_checkpoint_node),
+            run_time=0.8,
+        )
+        self.play(
+            LaggedStart(
+                *[FadeIn(protocol, shift=RIGHT * 0.12) for protocol in reuse_protocols],
+                lag_ratio=0.15,
+            ),
+            LaggedStart(
+                *[GrowArrow(arrow) for arrow in checkpoint_to_protocol_arrows],
+                lag_ratio=0.15,
+            ),
+            run_time=1.0,
+        )
+        self.play(
+            LaggedStart(
+                *[GrowArrow(arrow) for arrow in protocol_to_target_arrows],
+                lag_ratio=0.15,
+            ),
+            LaggedStart(
+                *[FadeIn(target, shift=RIGHT * 0.12) for target in reuse_targets],
+                lag_ratio=0.15,
+            ),
+            run_time=1.0,
+        )
+        self.play(FadeIn(checkpoint_benefits, shift=UP * 0.12), run_time=0.6)
+        self.wait()
+        self.next_slide()
+
+        # Improvement 3, slide 1: combine several physical signals into a
+        # robust stability criterion evaluated over a rolling time window.
+        improvement_three_transition = [
+            mobject for mobject in self.mobjects if mobject is not reuse_title_text
+        ]
+        self.play(
+            *[FadeOut(mobject) for mobject in improvement_three_transition],
+            run_time=0.7,
+        )
+        self.remove(*improvement_three_transition)
+        reuse_title_text.set_opacity(1).move_to(UP * 3.24)
+        improvement_title_line = Line(
+            LEFT * 6.11,
+            RIGHT * 6.11,
+            color=WHITE,
+            stroke_width=2.0,
+        ).move_to(UP * 2.74)
+        self.add(reuse_title_text, improvement_title_line)
+        self.bring_to_front(reuse_title_text, improvement_title_line)
+
+        improvement_three_label = Tex(
+            "Improvement 3: Robust stability criterion",
+            font_size=34,
+            color="#C6A64B",
+        ).move_to(UP * 2.30)
+
+        stability_metric_data = (
+            (
+                r"Kinetic energy $E_k$",
+                BLUE_A,
+                lambda value: 0.78 * np.exp(-4.3 * value) + 0.055,
+            ),
+            (
+                r"Force imbalance $\lVert\sum \mathbf{F}\rVert$",
+                GREEN_A,
+                lambda value: 0.74 * np.exp(-3.7 * value) + 0.070,
+            ),
+            (
+                r"Pressure drift $\lvert dp/dt\rvert$",
+                RED_A,
+                lambda value: 0.68
+                * np.exp(-4.8 * value)
+                * (0.82 + 0.14 * np.sin(15 * value))
+                + 0.045,
+            ),
+            (
+                r"Density drift $\lvert d\phi/dt\rvert$",
+                PURPLE_A,
+                lambda value: 0.65
+                * np.exp(-4.1 * value)
+                * (0.84 + 0.12 * np.sin(13 * value + 0.5))
+                + 0.050,
+            ),
+        )
+        stability_metric_positions = (
+            LEFT * 3.25 + UP * 0.60,
+            RIGHT * 3.25 + UP * 0.60,
+            LEFT * 3.25 + DOWN * 1.20,
+            RIGHT * 3.25 + DOWN * 1.20,
+        )
+        stability_metric_graphs = VGroup()
+        stability_threshold = 0.15
+        for (metric_label, metric_color, metric_function), position in zip(
+            stability_metric_data,
+            stability_metric_positions,
+        ):
+            metric_axes = Axes(
+                x_range=[0, 1, 0.5],
+                y_range=[0, 1, 0.5],
+                x_length=4.55,
+                y_length=0.82,
+                axis_config={"color": GREY_D, "stroke_width": 1.4},
+                tips=False,
+            )
+            metric_curve = metric_axes.plot(
+                metric_function,
+                x_range=[0, 1],
+                color=metric_color,
+                stroke_width=3.0,
+            )
+            metric_threshold_line = DashedLine(
+                metric_axes.c2p(0, stability_threshold),
+                metric_axes.c2p(1, stability_threshold),
+                dash_length=0.08,
+                color="#E5CB78",
+                stroke_width=1.6,
+            )
+            metric_title = Tex(metric_label, font_size=24, color=metric_color)
+            metric_title.next_to(metric_axes, UP, buff=0.12)
+            metric_threshold_label = MathTex(
+                r"\varepsilon",
+                font_size=19,
+                color="#E5CB78",
+            ).next_to(metric_threshold_line.get_right(), UP, buff=0.04)
+            metric_group = VGroup(
+                metric_axes,
+                metric_curve,
+                metric_threshold_line,
+                metric_title,
+                metric_threshold_label,
+            ).move_to(position)
+            stability_metric_graphs.add(metric_group)
+
+        rolling_window_rule = Tex(
+            r"\shortstack{Stable only when every metric remains below its threshold\\throughout the rolling window $\Delta t$}",
+            font_size=29,
+            color="#E5CB78",
+        ).to_edge(DOWN, buff=0.34)
+
+        self.play(Write(improvement_three_label), run_time=0.5)
+        self.play(
+            LaggedStart(
+                *[FadeIn(graph, shift=UP * 0.12) for graph in stability_metric_graphs],
+                lag_ratio=0.14,
+            ),
+            run_time=1.4,
+        )
+        self.play(FadeIn(rolling_window_rule, shift=UP * 0.12), run_time=0.7)
+        self.wait()
+        self.next_slide()
+
+        # Improvement 3, slide 2: use the criterion to stop waiting as soon as
+        # the packing is stable and immediately create a trusted checkpoint.
+        adaptive_stopping_transition = [
+            mobject
+            for mobject in self.mobjects
+            if mobject not in (reuse_title_text, improvement_title_line)
+        ]
+        self.play(
+            *[FadeOut(mobject) for mobject in adaptive_stopping_transition],
+            run_time=0.7,
+        )
+        self.remove(*adaptive_stopping_transition)
+        reuse_title_text.set_opacity(1).move_to(UP * 3.24)
+        improvement_title_line.set_opacity(1).move_to(UP * 2.74)
+        self.add(reuse_title_text, improvement_title_line)
+        self.bring_to_front(reuse_title_text, improvement_title_line)
+        adaptive_title_text = Tex(
+            "Conclusions and improvements",
+            font_size=55,
+        ).move_to(UP * 3.24)
+        self.add(adaptive_title_text)
+        self.bring_to_front(adaptive_title_text)
+
+        adaptive_stopping_label = Tex(
+            "Improvement 3: Adaptive stopping",
+            font_size=34,
+            color="#C6A64B",
+        ).move_to(UP * 2.30)
+
+        simulation_step_node = improvement_flow_node(
+            "Simulation step",
+            2.05,
+            BLUE_A,
+            font_size=24,
+        ).move_to(LEFT * 5.30 + DOWN * 0.15)
+        rolling_window_node = improvement_flow_node(
+            r"Update window $\Delta t$",
+            2.40,
+            "#C6A64B",
+            font_size=23,
+        ).move_to(LEFT * 2.65 + DOWN * 0.15)
+
+        stability_diamond = Square(
+            side_length=1.42,
+            stroke_color="#E5CB78",
+            stroke_width=2.2,
+            fill_color=BLACK,
+            fill_opacity=0.32,
+        ).rotate(PI / 4).move_to(RIGHT * 0.05 + DOWN * 0.15)
+        stability_diamond_label = Tex(
+            r"\shortstack{All metrics\\stable?}",
+            font_size=22,
+        ).move_to(stability_diamond)
+        stability_decision = VGroup(stability_diamond, stability_diamond_label)
+
+        end_stage_node = improvement_flow_node(
+            "End current stage",
+            2.20,
+            GREEN_A,
+            font_size=23,
+        ).move_to(RIGHT * 2.95 + UP * 0.90)
+        save_stable_checkpoint_node = improvement_flow_node(
+            "Save checkpoint",
+            2.10,
+            BLUE_A,
+            font_size=23,
+        ).move_to(RIGHT * 5.55 + UP * 0.90)
+        continue_simulation_node = improvement_flow_node(
+            "Continue simulation",
+            2.35,
+            RED_A,
+            font_size=23,
+        ).move_to(RIGHT * 2.95 + DOWN * 1.35)
+
+        adaptive_flow_arrows = VGroup(
+            Arrow(
+                simulation_step_node.get_right(),
+                rolling_window_node.get_left(),
+                buff=0.10,
+                color=BLUE_A,
+            ),
+            Arrow(
+                rolling_window_node.get_right(),
+                stability_decision.get_left(),
+                buff=0.10,
+                color="#C6A64B",
+            ),
+            Arrow(
+                (stability_decision.get_top() + stability_decision.get_right()) / 2,
+                end_stage_node.get_left(),
+                buff=0.08,
+                color=GREEN_A,
+                stroke_width=2.4,
+                tip_length=0.18,
+            ),
+            Arrow(
+                end_stage_node.get_right(),
+                save_stable_checkpoint_node.get_left(),
+                buff=0.10,
+                color=BLUE_A,
+            ),
+            Arrow(
+                (stability_decision.get_bottom() + stability_decision.get_right()) / 2,
+                continue_simulation_node.get_left(),
+                buff=0.08,
+                color=RED_A,
+                stroke_width=2.4,
+                tip_length=0.18,
+            ),
+        )
+        retry_arrow = CurvedArrow(
+            continue_simulation_node.get_left() + DOWN * 0.08,
+            rolling_window_node.get_bottom() + DOWN * 0.02,
+            angle=-PI / 2.4,
+            color=RED_A,
+            stroke_width=2.0,
+            tip_length=0.18,
+        )
+        yes_label = Tex("Yes", font_size=20, color=GREEN_A)
+        no_label = Tex("No", font_size=20, color=RED_A)
+        yes_label.next_to(adaptive_flow_arrows[2], UP, buff=0.06)
+        no_label.next_to(adaptive_flow_arrows[4], DOWN, buff=0.06)
+
+        adaptive_nodes = VGroup(
+            simulation_step_node,
+            rolling_window_node,
+            stability_decision,
+            end_stage_node,
+            save_stable_checkpoint_node,
+            continue_simulation_node,
+        )
+        self.play(Write(adaptive_stopping_label), run_time=0.5)
+        self.play(
+            LaggedStart(
+                *[FadeIn(node, scale=0.92) for node in adaptive_nodes],
+                lag_ratio=0.10,
+            ),
+            run_time=1.1,
+        )
+        self.play(
+            LaggedStart(
+                *[GrowArrow(arrow) for arrow in adaptive_flow_arrows],
+                lag_ratio=0.08,
+            ),
+            Create(retry_arrow),
+            FadeIn(yes_label),
+            FadeIn(no_label),
+            run_time=1.2,
+        )
+        self.wait()
+        self.next_slide()
+
+        # Improvement 4, slide 1: add particle temperature and use a complete
+        # thermo-mechanical cycle to restructure the contact network.
+        improvement_four_transition = [
+            mobject
+            for mobject in self.mobjects
+            if mobject not in (adaptive_title_text, improvement_title_line)
+        ]
+        self.play(
+            *[FadeOut(mobject) for mobject in improvement_four_transition],
+            run_time=0.7,
+        )
+        self.remove(*improvement_four_transition)
+        adaptive_title_text.set_opacity(1).move_to(UP * 3.24)
+        improvement_title_line.set_opacity(1).move_to(UP * 2.74)
+        self.add(adaptive_title_text, improvement_title_line)
+        self.bring_to_front(adaptive_title_text, improvement_title_line)
+
+        improvement_four_label = Tex(
+            "Improvement 4: Temperature-assisted densification",
+            font_size=34,
+            color="#C6A64B",
+        ).move_to(UP * 2.30)
+
+        cooling_node = improvement_flow_node(
+            r"\shortstack{Physical cooling\\$T\downarrow$}",
+            2.45,
+            BLUE_A,
+            font_size=24,
+        ).move_to(UP * 1.00)
+        compression_node = improvement_flow_node(
+            r"\shortstack{Compression\\$V\downarrow$}",
+            2.45,
+            GREEN_A,
+            font_size=24,
+        ).move_to(RIGHT * 4.05 + DOWN * 0.45)
+        heating_node = improvement_flow_node(
+            r"\shortstack{Particle heating\\$T\uparrow$}",
+            2.45,
+            RED_A,
+            font_size=24,
+        ).move_to(DOWN * 1.90)
+        decompression_node = improvement_flow_node(
+            r"\shortstack{Decompression\\$V\uparrow$}",
+            2.45,
+            PURPLE_A,
+            font_size=24,
+        ).move_to(LEFT * 4.05 + DOWN * 0.45)
+        thermo_cycle_nodes = VGroup(
+            cooling_node,
+            compression_node,
+            heating_node,
+            decompression_node,
+        )
+
+        cycle_center = Circle(
+            radius=0.90,
+            stroke_color="#C6A64B",
+            stroke_width=2.2,
+            fill_color="#C6A64B",
+            fill_opacity=0.10,
+        ).move_to(DOWN * 0.45)
+        cycle_center_label = Tex(
+            r"\shortstack{Restructure the\\contact network}",
+            font_size=24,
+            color="#E5CB78",
+        ).move_to(cycle_center)
+        thermo_cycle_center = VGroup(cycle_center, cycle_center_label)
+
+        thermo_cycle_arrows = VGroup(
+            Arrow(
+                cooling_node.get_corner(DR),
+                compression_node.get_corner(UL),
+                buff=0.12,
+                color=GREEN_A,
+                stroke_width=2.5,
+                tip_length=0.18,
+            ),
+            Arrow(
+                compression_node.get_corner(DL),
+                heating_node.get_corner(UR),
+                buff=0.12,
+                color=RED_A,
+                stroke_width=2.5,
+                tip_length=0.18,
+            ),
+            Arrow(
+                heating_node.get_corner(UL),
+                decompression_node.get_corner(DR),
+                buff=0.12,
+                color=PURPLE_A,
+                stroke_width=2.5,
+                tip_length=0.18,
+            ),
+            Arrow(
+                decompression_node.get_corner(UR),
+                cooling_node.get_corner(DL),
+                buff=0.12,
+                color=BLUE_A,
+                stroke_width=2.5,
+                tip_length=0.18,
+            ),
+        )
+        thermo_cycle_gain = Tex(
+            r"Repeated cycles $\Rightarrow$ new particle arrangements and higher density",
+            font_size=29,
+            color="#E5CB78",
+        ).to_edge(DOWN, buff=0.34)
+
+        self.play(Write(improvement_four_label), run_time=0.5)
+        self.play(
+            FadeIn(thermo_cycle_center, scale=0.90),
+            LaggedStart(
+                *[FadeIn(node, scale=0.92) for node in thermo_cycle_nodes],
+                lag_ratio=0.12,
+            ),
+            run_time=1.1,
+        )
+        self.play(
+            LaggedStart(
+                *[GrowArrow(arrow) for arrow in thermo_cycle_arrows],
+                lag_ratio=0.12,
+            ),
+            run_time=1.1,
+        )
+        self.play(FadeIn(thermo_cycle_gain, shift=UP * 0.12), run_time=0.7)
+        self.wait()
+        self.next_slide()
+
+        # Improvement 4, slide 2: illustrate the expected structural change
+        # after one or more thermo-mechanical cycles.
+        thermo_effect_transition = [
+            mobject
+            for mobject in self.mobjects
+            if mobject not in (adaptive_title_text, improvement_title_line)
+        ]
+        self.play(
+            *[FadeOut(mobject) for mobject in thermo_effect_transition],
+            run_time=0.7,
+        )
+        self.remove(*thermo_effect_transition)
+        adaptive_title_text.set_opacity(1).move_to(UP * 3.24)
+        improvement_title_line.set_opacity(1).move_to(UP * 2.74)
+        self.add(adaptive_title_text, improvement_title_line)
+        thermo_effect_title_text = Tex(
+            "Conclusions and improvements",
+            font_size=55,
+        ).move_to(UP * 3.24)
+        self.add(thermo_effect_title_text)
+        self.bring_to_front(
+            adaptive_title_text,
+            thermo_effect_title_text,
+            improvement_title_line,
+        )
+
+        thermo_effect_label = Tex(
+            "Improvement 4: Expected structural effect",
+            font_size=34,
+            color="#C6A64B",
+        ).move_to(UP * 2.30)
+
+        initial_thermal_container = Square(
+            side_length=3.55,
+            stroke_color=BLUE_A,
+            stroke_width=2.8,
+        ).move_to(LEFT * 4.20 + DOWN * 0.35)
+        final_thermal_container = Square(
+            side_length=3.02,
+            stroke_color=GREEN_A,
+            stroke_width=2.8,
+        ).move_to(RIGHT * 4.20 + DOWN * 0.35)
+
+        initial_thermal_positions = (
+            (-1.25, -1.20),
+            (-0.55, -1.28),
+            (0.20, -1.16),
+            (1.08, -1.22),
+            (-1.10, -0.48),
+            (-0.25, -0.58),
+            (0.58, -0.43),
+            (1.25, -0.52),
+            (-1.30, 0.30),
+            (-0.48, 0.20),
+            (0.30, 0.38),
+            (1.12, 0.24),
+            (-1.05, 1.08),
+            (-0.20, 1.18),
+            (0.62, 1.02),
+            (1.28, 1.12),
+        )
+        final_thermal_positions = (
+            (-0.96, -0.94),
+            (-0.32, -0.94),
+            (0.32, -0.94),
+            (0.96, -0.94),
+            (-1.06, -0.31),
+            (-0.40, -0.31),
+            (0.26, -0.31),
+            (0.92, -0.31),
+            (-0.96, 0.32),
+            (-0.32, 0.32),
+            (0.32, 0.32),
+            (0.96, 0.32),
+            (-1.06, 0.95),
+            (-0.40, 0.95),
+            (0.26, 0.95),
+            (0.92, 0.95),
+        )
+        initial_thermal_particles = VGroup(
+            *[
+                Circle(
+                    radius=0.29,
+                    stroke_color=BLACK,
+                    stroke_width=0.6,
+                    fill_color="#C6A64B",
+                    fill_opacity=0.92,
+                ).move_to(
+                    initial_thermal_container.get_center()
+                    + RIGHT * x_position
+                    + UP * y_position
+                )
+                for x_position, y_position in initial_thermal_positions
+            ]
+        )
+        final_thermal_particles = VGroup(
+            *[
+                Circle(
+                    radius=0.29,
+                    stroke_color=BLACK,
+                    stroke_width=0.6,
+                    fill_color="#C6A64B",
+                    fill_opacity=0.92,
+                ).move_to(
+                    final_thermal_container.get_center()
+                    + RIGHT * x_position
+                    + UP * y_position
+                )
+                for x_position, y_position in final_thermal_positions
+            ]
+        )
+        initial_thermal_packing = VGroup(
+            initial_thermal_container,
+            initial_thermal_particles,
+        )
+        final_thermal_packing = VGroup(
+            final_thermal_container,
+            final_thermal_particles,
+        )
+        initial_structure_label = Tex("Initial structure", font_size=28, color=BLUE_A)
+        final_structure_label = Tex(
+            "After thermo-mechanical cycles",
+            font_size=28,
+            color=GREEN_A,
+        )
+        initial_structure_label.next_to(initial_thermal_container, DOWN, buff=0.22)
+        final_structure_label.next_to(final_thermal_container, DOWN, buff=0.22)
+
+        structural_change_arrow = Arrow(
+            initial_thermal_container.get_right(),
+            final_thermal_container.get_left(),
+            buff=0.40,
+            color="#C6A64B",
+            stroke_width=3.0,
+            tip_length=0.22,
+        )
+        structural_protocol_label = Tex(
+            r"\shortstack{Cool $\rightarrow$ compress\\heat $\rightarrow$ decompress}",
+            font_size=25,
+            color="#E5CB78",
+        ).next_to(structural_change_arrow, UP, buff=0.18)
+        density_increase_label = MathTex(
+            r"\phi_{\mathrm{final}} > \phi_{\mathrm{initial}}",
+            font_size=38,
+            color="#E5CB78",
+        ).to_edge(DOWN, buff=0.28)
+
+        self.play(Write(thermo_effect_label), run_time=0.5)
+        self.play(
+            Create(initial_thermal_container),
+            LaggedStart(
+                *[
+                    FadeIn(particle, scale=0.72)
+                    for particle in initial_thermal_particles
+                ],
+                lag_ratio=0.035,
+            ),
+            Write(initial_structure_label),
+            run_time=1.2,
+        )
+        self.play(
+            GrowArrow(structural_change_arrow),
+            FadeIn(structural_protocol_label),
+            run_time=0.7,
+        )
+        self.play(
+            TransformFromCopy(initial_thermal_packing, final_thermal_packing),
+            FadeIn(final_structure_label, shift=UP * 0.10),
+            run_time=1.3,
+        )
+        self.play(FadeIn(density_increase_label, shift=UP * 0.12), run_time=0.7)
+        self.wait()
+        self.next_slide()
+
+        final_slide_objects = list(self.mobjects)
+        self.play(
+            *[FadeOut(mobject) for mobject in final_slide_objects],
+            run_time=0.8,
+        )
+        self.remove(*final_slide_objects)
+
+        thank_you_label = Tex(
+            "Thank you",
+            font_size=100,
+            color="#E5CB78",
+        )
+        self.play(FadeIn(thank_you_label, scale=0.92), run_time=1.0)
+        self.wait()
+        self.next_slide()
