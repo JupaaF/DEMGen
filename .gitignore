@@ -6,7 +6,8 @@ __pycache__/
 presentation/media
 presentation/slides
 
-
+experiments/
+hpc/acuario/results/
 # C extensions
 *.so
 

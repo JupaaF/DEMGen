@@ -85,6 +85,20 @@ the number of intervals, so both endpoints are saved and the example produces
 Density is set by the initial packing and is not actively controlled during
 the pressure sweep. It can therefore vary slightly along the curve.
 
+Equal endpoints are allowed when only one stabilized boundary point is needed.
+In that case `number_of_steps` is retained for schema consistency, but the
+target sequence contains one pressure and exactly one checkpoint is saved:
+
+```json
+"curve_generation": {
+    "mode": "stress_sweep",
+    "initial_density": 0.5,
+    "initial_stress": 1000.0,
+    "final_stress": 1000.0,
+    "number_of_steps": 1
+}
+```
+
 ## Cyclic stress
 
 ```json
@@ -140,20 +154,24 @@ zero-friction phases. Only ascending density sweeps are supported.
 
 ## Outputs
 
-Every selected curve point produces:
+Every selected curve point produces a self-contained directory under
+`checkpoints/checkpoint_NNN`. Each checkpoint contains:
 
-- An `inletPGDEM_*.mdpa` packing in the generated case directory.
-- A row in `stress_tensor_save.txt`.
-- A complete GiD result at the checkpoint time.
+- The native Kratos restart (`.rest`) for all six DEM model parts, including
+  particles and contacts.
+- A `checkpoint.json` manifest with the restart label, deformed box limits,
+  curve settings, random seed, target/measured stress, packing density,
+  unbalanced force, and corresponding `inletPGDEM_*.mdpa` name.
 
-The final packing is also written to `show_packing/inletPGDEM.mdpa`. The saved
-state rows contain, in order: time, mean stress, density, full stress tensor,
-mean coordination number, conductivity tensor and trace, mean tangential
-stress, tangential stress tensor, shear stress, fabric tensor, and the second
-invariant of its deviatoric tensor.
+The corresponding `inletPGDEM_*.mdpa` particle packing remains in the generated
+case directory, and the final packing is also written to
+`show_packing/inletPGDEM.mdpa`. Stress, density, coordination, conductivity,
+fabric, and other descriptors are intentionally not written while generating
+the curve. They can be calculated afterwards from the particle/contact restart
+and the box limits in its manifest.
 
 For `zigzag_point`, intermediate legs are not selected curve points: only the
-final `inletPGDEM_target.mdpa`, measurement row, and GiD checkpoint are written.
+final `inletPGDEM_target.mdpa` and its restart checkpoint are written.
 
 ## Small-simulation validation suite
 
@@ -170,8 +188,8 @@ DEMGEN_RUN_SIMULATION_TESTS=1 python3 -m unittest tests.test_curve_generation_si
 ```
 
 The tests validate successful completion, logarithmic target order, the
-fractional zigzag target, checkpoint MDPA files, GiD results, all 44 measured
-values, increasing density, cyclic extrema, and the absence of intermediate
-zigzag packings.
+fractional zigzag target, checkpoint MDPA files, complete native restart
+checkpoints, cyclic extrema, and the absence of intermediate zigzag packings
+and generation-time metric files.
 The environment variable keeps these simulations out of the fast default
 unit-test run.

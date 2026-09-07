@@ -85,6 +85,15 @@ class CreateParticlesInsideOfADomain():
         self.copy_seed_files_to_aim_folders()
 
     def write_case_parameters(self):
+        random_settings = self.parameters["random_variable_settings"]
+        random_seed = self.parameters["SEED"].GetInt()
+        if "seed" in random_settings.keys():
+            random_seed = random_settings["seed"].GetInt()
+        do_use_seed = False
+        if "DO_USE_SEED" in self.parameters.keys():
+            do_use_seed = self.parameters["DO_USE_SEED"].GetBool()
+        if "do_use_seed" in random_settings.keys():
+            do_use_seed = random_settings["do_use_seed"].GetBool()
         case_parameters = {
             "attempt_packing_density": self.parameters["target_packing_density"].GetDouble(),
             "servo_target_packing_density": self.initial_target_packing_density,
@@ -94,6 +103,8 @@ class CreateParticlesInsideOfADomain():
             "tolerance_of_target_mean_stress": self.tolerance_of_target_mean_stress,
             "minimum_mean_stress": self.minimum_mean_stress,
             "curve_generation": self.curve_generation.to_dict(),
+            "random_seed": random_seed,
+            "do_use_seed": do_use_seed,
         }
         parameters_path = self.case_path / "demgen_case_parameters.json"
         with parameters_path.open("w", encoding="utf-8") as parameters_file:

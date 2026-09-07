@@ -10,6 +10,7 @@ __license__     = "BSD 2-Clause License"
 #/////////////////////////////////////////////////
 
 import argparse
+import json
 import time
 import sys
 import shutil
@@ -26,6 +27,7 @@ from KratosMultiphysics import *
 from KratosMultiphysics.DEMApplication import *
 from KratosMultiphysics.DEMApplication.DEM_analysis_stage import DEMAnalysisStage
 from KratosMultiphysics import Logger
+from KratosMultiphysics.restart_utility import RestartUtility
 
 from demgen_case_parameters import load_case_parameters
 from particles import ParticlePacking, SphericalParticle
@@ -38,20 +40,18 @@ from curve_generation import (
     ZIGZAG_POINT,
 )
 
-if os.path.exists("normalized_kinematic_energy.txt"):
-    os.remove("normalized_kinematic_energy.txt")
+for legacy_metric_file in (
+    "normalized_kinematic_energy.txt",
+    "stress_tensor_0.txt",
+    "stress_tensor_1.txt",
+    "stress_tensor_save.txt",
+    "target_stress.txt",
+):
+    pathlib.Path(legacy_metric_file).unlink(missing_ok=True)
 if os.path.exists("inletPGDEM.mdpa"):
     os.remove("inletPGDEM.mdpa")
-if os.path.exists("stress_tensor_0.txt"):
-    os.remove("stress_tensor_0.txt")
-if os.path.exists("stress_tensor_1.txt"):
-    os.remove("stress_tensor_1.txt")
 if os.path.exists("inletPGDEM_post_1.mdpa"):
     os.remove("inletPGDEM_post_1.mdpa")
-if os.path.exists("stress_tensor_save.txt"):
-    os.remove("stress_tensor_save.txt")
-if os.path.exists("target_stress.txt"):
-    os.remove("target_stress.txt")
 if os.path.exists("success.txt"):
     os.remove("success.txt")
 ''' 
@@ -61,6 +61,15 @@ if os.path.exists("granular_temperature_0.txt"):
 '''
 
 class DEMAnalysisStageWithFlush(DEMAnalysisStage):
+
+    checkpoint_model_part_names = (
+        "SpheresPart",
+        "RigidFacePart",
+        "ClusterPart",
+        "DEMInletPart",
+        "MappingPart",
+        "ContactPart",
+    )
 
     def __init__(
         self,
@@ -282,22 +291,13 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
             center_y = 0.0
             center_z = 0.0
 
-            self.normalized_kinematic_energy = self.DEMEnergyCalculator.CalculateNormalizedKinematicEnergy()
             measured_unbalanced_force = self.MeasureSphereForGettingPackingProperties((side_length/2), center_x, center_y, center_z, 'unbalanced_force')
-            with open("normalized_kinematic_energy.txt", 'a') as file:
-                file.write(str(self.time) + ' ' + str(self.normalized_kinematic_energy) + ' ' + str(measured_unbalanced_force) + '\n')
-
 
             packing_state = self._MeasurePackingState()
+            packing_state["unbalanced_force"] = measured_unbalanced_force
             self._ReportCurrentCurveState(packing_state)
             mean_stress = packing_state["mean_stress"]
-            self._WritePackingState(
-                "stress_tensor_1.txt" if self.is_start_servo_control else "stress_tensor_0.txt",
-                packing_state,
-            )
             self.measured_stress_list.append(mean_stress)
-            with open("target_stress.txt", "a") as target_stress_file:
-                target_stress_file.write(f"{self.time} {self.target_mean_stress}\n")
 
             if not self.is_start_servo_control:
 
@@ -366,58 +366,11 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
         stress_tensor = self.MeasureSphereForGettingGlobalStressTensor()
         mean_stress = sum(stress_tensor[index][index] for index in range(3)) / 3
 
-        stress_tensor_tangential = self.MeasureGlobalStressTensorTangential()
-        mean_stress_tangential = sum(
-            stress_tensor_tangential[index][index] for index in range(3)
-        ) / 3
-        tangential_square_sum = sum(
-            stress_tensor_tangential[row][column] ** 2
-            for row in range(3)
-            for column in range(3)
-        )
-        shear_stress = np.sqrt(1.5 * tangential_square_sum)
-
-        measured_conductivity, measured_conductivity_trace = (
-            self.MeasureGlobalConductivityTensor()
-        )
-        _, second_invariant, measured_fabric_tensor = self.MeasureGlobalFabricTensor()
-
         return {
             "time": self.time,
             "mean_stress": mean_stress,
             "packing_density": self.final_packing_density,
-            "stress_tensor": stress_tensor,
-            "mean_coordination_number": self.MeasureGlobalMeanCoordinationNumber(),
-            "conductivity_tensor": measured_conductivity,
-            "conductivity_trace": measured_conductivity_trace,
-            "mean_stress_tangential": mean_stress_tangential,
-            "stress_tensor_tangential": stress_tensor_tangential,
-            "shear_stress": shear_stress,
-            "fabric_tensor": measured_fabric_tensor,
-            "fabric_second_invariant": second_invariant,
         }
-
-    def _WritePackingState(self, output_file_name, packing_state):
-        values = [
-            packing_state["time"],
-            packing_state["mean_stress"],
-            packing_state["packing_density"],
-            *self._FlattenTensor(packing_state["stress_tensor"]),
-            packing_state["mean_coordination_number"],
-            *self._FlattenTensor(packing_state["conductivity_tensor"]),
-            packing_state["conductivity_trace"],
-            packing_state["mean_stress_tangential"],
-            *self._FlattenTensor(packing_state["stress_tensor_tangential"]),
-            packing_state["shear_stress"],
-            *self._FlattenTensor(packing_state["fabric_tensor"]),
-            packing_state["fabric_second_invariant"],
-        ]
-        with open(output_file_name, "a") as output_file:
-            output_file.write(" ".join(str(value) for value in values) + "\n")
-
-    @staticmethod
-    def _FlattenTensor(tensor):
-        return [tensor[row][column] for row in range(3) for column in range(3)]
 
     def _HandleStableServoState(self, packing_state):
         self._ReportCurveProgress(
@@ -625,8 +578,6 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
         self.zero_friction_phase_counter = 0
 
     def _SaveCurveCheckpoint(self, packing_state):
-        self._WritePackingState("stress_tensor_save.txt", packing_state)
-
         if self.curve_generation.mode == STRESS_SWEEP:
             output_name = f"inletPGDEM_{round(self.target_mean_stress)}.mdpa"
         elif self.curve_generation.mode == CYCLIC_STRESS:
@@ -656,11 +607,78 @@ class DEMAnalysisStageWithFlush(DEMAnalysisStage):
             self.WriteOutMdpaFileOfParticles(output_name)
         finally:
             self.second_stage_flag = second_stage_flag
-        self.PrintResultsForGid(self.time)
+        checkpoint_path = self._WriteRestartCheckpoint(output_name, packing_state)
         self._ReportCurveProgress(
-            f"saved checkpoint={self.curve_checkpoint_index + 1} as {output_name}"
+            f"saved checkpoint={self.curve_checkpoint_index + 1} at "
+            f"{checkpoint_path}"
         )
         self.curve_checkpoint_index += 1
+
+    def _WriteRestartCheckpoint(self, packing_file_name, packing_state):
+        checkpoint_path = (
+            pathlib.Path("checkpoints")
+            / f"checkpoint_{self.curve_checkpoint_index:03d}"
+        )
+        checkpoint_path.mkdir(parents=True, exist_ok=False)
+
+        label = str(float(f"{self.time:.12g}"))
+        restart_files = []
+        for model_part_name in self.checkpoint_model_part_names:
+            relative_output_path = (
+                checkpoint_path / f"{model_part_name}__restart_files"
+            )
+            settings = KratosMultiphysics.Parameters(
+                json.dumps(
+                    {
+                        "input_filename": model_part_name,
+                        "input_output_path": str(relative_output_path),
+                        "serializer_trace": "no_trace",
+                        "restart_save_frequency": 0.0,
+                        "restart_control_type": "time",
+                        "save_restart_files_in_folder": True,
+                        "max_files_to_keep": -1,
+                    }
+                )
+            )
+            model_part = self.model.GetModelPart(model_part_name)
+            model_part.ProcessInfo[TIME] = self.time
+            restart_utility = RestartUtility(model_part, settings)
+            restart_utility.CreateOutputFolder()
+            restart_utility.SaveRestart()
+            restart_files.append(
+                str(
+                    pathlib.Path(f"{model_part_name}__restart_files")
+                    / f"{model_part_name}_{label}.rest"
+                )
+            )
+
+        checkpoint = {
+            "version": 1,
+            "curve_generation": self.curve_generation.to_dict(),
+            "checkpoint_index": self.curve_checkpoint_index,
+            "simulation_time": self.time,
+            "target_stress": self.target_mean_stress,
+            "mean_stress_pa": packing_state["mean_stress"],
+            "packing_density": packing_state["packing_density"],
+            "unbalanced_force": packing_state["unbalanced_force"],
+            "random_seed": self.case_parameters.get("random_seed"),
+            "packing_file": packing_file_name,
+            "restart_label": label,
+            "restart_files": restart_files,
+            "box_bounds": {
+                "BoundingBoxMinX": self.BoundingBoxMinX_update,
+                "BoundingBoxMinY": self.BoundingBoxMinY_update,
+                "BoundingBoxMinZ": self.BoundingBoxMinZ_update,
+                "BoundingBoxMaxX": self.BoundingBoxMaxX_update,
+                "BoundingBoxMaxY": self.BoundingBoxMaxY_update,
+                "BoundingBoxMaxZ": self.BoundingBoxMaxZ_update,
+            },
+        }
+        manifest_path = checkpoint_path / "checkpoint.json"
+        temporary_path = checkpoint_path / "checkpoint.tmp"
+        temporary_path.write_text(json.dumps(checkpoint, indent=2), encoding="utf-8")
+        temporary_path.replace(manifest_path)
+        return checkpoint_path
 
     def _CompleteSimulation(self):
         self._ReportCurveProgress(

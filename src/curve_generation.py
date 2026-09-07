@@ -235,10 +235,6 @@ def parse_curve_generation_settings(
             "curve_generation.final_stress",
             minimum_stress,
         )
-        if initial_stress == final_stress:
-            raise ValueError(
-                "A stress_sweep requires different initial_stress and final_stress values."
-            )
         return CurveGenerationSettings(
             mode=mode,
             initial_density=initial_density,

@@ -1,6 +1,8 @@
 import json
+import math
 import os
 from pathlib import Path
+import re
 import signal
 import shutil
 import subprocess
@@ -52,13 +54,11 @@ class CurveGenerationSimulationTests(unittest.TestCase):
                 "inletPGDEM_cycle_001_minimum.mdpa",
             ):
                 self.assertTrue((case_dir / output_name).is_file())
-            self.assert_checkpoint_stresses(
+            self.assert_checkpoint_targets(
                 case_dir,
                 [12500.0, 50000.0, 12500.0],
-                STRICT_STRESS_TOLERANCE,
             )
-            self.assert_complete_measurements(case_dir)
-            self.assert_gid_checkpoints(case_dir)
+            self.assert_complete_checkpoints(case_dir)
 
     def test_single_point_writes_one_complete_checkpoint(self):
         with self.run_simulation(
@@ -73,13 +73,11 @@ class CurveGenerationSimulationTests(unittest.TestCase):
             self.assertEqual(self.checkpoint_rows(case_dir), 1)
             self.assertTrue((case_dir / "inletPGDEM_target.mdpa").is_file())
             self.assert_density_near_sixty_two_percent(case_dir)
-            self.assert_checkpoint_stresses(
+            self.assert_checkpoint_targets(
                 case_dir,
                 [50000.0],
-                STRICT_STRESS_TOLERANCE,
             )
-            self.assert_complete_measurements(case_dir)
-            self.assert_gid_checkpoints(case_dir)
+            self.assert_complete_checkpoints(case_dir)
 
     def test_zigzag_point_saves_only_the_final_fractional_search_result(self):
         with self.run_simulation(
@@ -104,13 +102,11 @@ class CurveGenerationSimulationTests(unittest.TestCase):
             self.assertFalse(list(case_dir.glob("inletPGDEM_density_*.mdpa")))
             self.assertFalse(list(case_dir.glob("inletPGDEM_[0-9]*.mdpa")))
             self.assert_density_near_sixty_two_percent(case_dir)
-            self.assert_checkpoint_stresses(
+            self.assert_checkpoint_targets(
                 case_dir,
                 [50000.0],
-                STRICT_STRESS_TOLERANCE,
             )
-            self.assert_complete_measurements(case_dir)
-            self.assert_gid_checkpoints(case_dir)
+            self.assert_complete_checkpoints(case_dir)
 
     def test_ascending_stress_sweep_saves_every_logarithmic_target(self):
         with self.run_simulation(
@@ -132,13 +128,29 @@ class CurveGenerationSimulationTests(unittest.TestCase):
             for target in (12500, 25000, 50000):
                 self.assertTrue((case_dir / f"inletPGDEM_{target}.mdpa").is_file())
             self.assert_density_near_sixty_two_percent(case_dir)
-            self.assert_checkpoint_stresses(
+            self.assert_checkpoint_targets(
                 case_dir,
                 [12500.0, 25000.0, 50000.0],
-                STRICT_STRESS_TOLERANCE,
             )
-            self.assert_complete_measurements(case_dir)
-            self.assert_gid_checkpoints(case_dir)
+            self.assert_complete_checkpoints(case_dir)
+
+    def test_equal_endpoint_stress_sweep_saves_one_checkpoint(self):
+        with self.run_simulation(
+            {
+                "mode": "stress_sweep",
+                "initial_density": TARGET_DENSITY,
+                "initial_stress": 12500.0,
+                "final_stress": 12500.0,
+                "number_of_steps": 1,
+            },
+            density_tolerance=0.0001,
+        ) as case_dir:
+            self.assert_successful_case(case_dir)
+            self.assertEqual(self.target_sequence(case_dir), [12500.0])
+            self.assertEqual(self.checkpoint_rows(case_dir), 1)
+            self.assertTrue((case_dir / "inletPGDEM_12500.mdpa").is_file())
+            self.assert_checkpoint_targets(case_dir, [12500.0])
+            self.assert_complete_checkpoints(case_dir)
 
     def test_descending_stress_sweep_saves_targets_in_reverse_order(self):
         with self.run_simulation(
@@ -158,13 +170,11 @@ class CurveGenerationSimulationTests(unittest.TestCase):
             )
             self.assertEqual(self.checkpoint_rows(case_dir), 3)
             self.assert_density_near_sixty_two_percent(case_dir)
-            self.assert_checkpoint_stresses(
+            self.assert_checkpoint_targets(
                 case_dir,
                 [50000.0, 25000.0, 12500.0],
-                STRICT_STRESS_TOLERANCE,
             )
-            self.assert_complete_measurements(case_dir)
-            self.assert_gid_checkpoints(case_dir)
+            self.assert_complete_checkpoints(case_dir)
 
     def test_density_sweep_saves_only_the_ascending_vertical_curve(self):
         with self.run_simulation(
@@ -193,13 +203,11 @@ class CurveGenerationSimulationTests(unittest.TestCase):
             self.assertGreater(densities[-1], densities[0])
             self.assertGreaterEqual(densities[-1], 0.623)
             self.assert_density_near_sixty_two_percent(case_dir)
-            self.assert_checkpoint_stresses(
+            self.assert_checkpoint_targets(
                 case_dir,
                 [50000.0] * len(density_packings),
-                STRICT_STRESS_TOLERANCE,
             )
-            self.assert_complete_measurements(case_dir)
-            self.assert_gid_checkpoints(case_dir)
+            self.assert_complete_checkpoints(case_dir)
 
     def run_simulation(
         self,
@@ -353,31 +361,42 @@ class CurveGenerationSimulationTests(unittest.TestCase):
         self.assertLessEqual(self.particle_count(case_dir), 700)
 
     def checkpoint_rows(self, case_dir):
-        return len(
-            (case_dir / "stress_tensor_save.txt").read_text(encoding="utf-8").splitlines()
-        )
+        return len(self.checkpoint_manifests(case_dir))
+
+    def checkpoint_manifests(self, case_dir):
+        return [
+            json.loads(path.read_text(encoding="utf-8"))
+            for path in sorted((case_dir / "checkpoints").glob("*/checkpoint.json"))
+        ]
 
     def checkpoint_densities(self, case_dir):
+        densities = []
+        for checkpoint in self.checkpoint_manifests(case_dir):
+            packing_path = case_dir / checkpoint["packing_file"]
+            packing = packing_path.read_text(encoding="utf-8").splitlines()
+            begin = packing.index("Begin NodalData RADIUS") + 1
+            end = packing.index("End NodalData", begin)
+            solid_volume = sum(
+                4.0 / 3.0 * math.pi * float(line.split()[2]) ** 3
+                for line in packing[begin:end]
+            )
+            bounds = checkpoint["box_bounds"]
+            box_volume = (
+                (bounds["BoundingBoxMaxX"] - bounds["BoundingBoxMinX"])
+                * (bounds["BoundingBoxMaxY"] - bounds["BoundingBoxMinY"])
+                * (bounds["BoundingBoxMaxZ"] - bounds["BoundingBoxMinZ"])
+            )
+            densities.append(solid_volume / box_volume)
+        return densities
+
+    def checkpoint_targets(self, case_dir):
         return [
-            float(row.split()[2])
-            for row in (case_dir / "stress_tensor_save.txt")
-            .read_text(encoding="utf-8")
-            .splitlines()
+            checkpoint["target_stress"]
+            for checkpoint in self.checkpoint_manifests(case_dir)
         ]
 
-    def checkpoint_stresses(self, case_dir):
-        return [
-            float(row.split()[1])
-            for row in (case_dir / "stress_tensor_save.txt")
-            .read_text(encoding="utf-8")
-            .splitlines()
-        ]
-
-    def assert_checkpoint_stresses(self, case_dir, targets, tolerance):
-        stresses = self.checkpoint_stresses(case_dir)
-        self.assertEqual(len(stresses), len(targets))
-        for measured, target in zip(stresses, targets):
-            self.assertLessEqual(abs(measured - target), tolerance)
+    def assert_checkpoint_targets(self, case_dir, targets):
+        self.assertEqual(self.checkpoint_targets(case_dir), targets)
 
     def assert_density_near_sixty_two_percent(self, case_dir):
         for density in self.checkpoint_densities(case_dir):
@@ -385,11 +404,13 @@ class CurveGenerationSimulationTests(unittest.TestCase):
             self.assertLessEqual(density, 0.635)
 
     def target_sequence(self, case_dir):
+        simulation_log = case_dir.parents[1] / "simulation.log"
         targets = [
-            float(line.split()[1])
-            for line in (case_dir / "target_stress.txt")
-            .read_text(encoding="utf-8")
-            .splitlines()
+            float(match.group(1))
+            for match in re.finditer(
+                r"\[curve_generation\] seeking stress=([0-9.eE+-]+) Pa",
+                simulation_log.read_text(encoding="utf-8"),
+            )
         ]
         sequence = []
         for target in targets:
@@ -397,18 +418,40 @@ class CurveGenerationSimulationTests(unittest.TestCase):
                 sequence.append(target)
         return sequence
 
-    def assert_complete_measurements(self, case_dir):
-        rows = (
-            (case_dir / "stress_tensor_save.txt")
-            .read_text(encoding="utf-8")
-            .splitlines()
-        )
-        self.assertTrue(rows)
-        self.assertTrue(all(len(row.split()) == 44 for row in rows))
-
-    def assert_gid_checkpoints(self, case_dir):
-        gid_results = list((case_dir / "inletPG_Post_Files").glob("*.post.res"))
-        self.assertGreaterEqual(len(gid_results), self.checkpoint_rows(case_dir))
+    def assert_complete_checkpoints(self, case_dir):
+        manifests = self.checkpoint_manifests(case_dir)
+        self.assertTrue(manifests)
+        expected_parts = {
+            "SpheresPart",
+            "RigidFacePart",
+            "ClusterPart",
+            "DEMInletPart",
+            "MappingPart",
+            "ContactPart",
+        }
+        for manifest_path, manifest in zip(
+            sorted((case_dir / "checkpoints").glob("*/checkpoint.json")),
+            manifests,
+        ):
+            self.assertEqual(manifest["version"], 1)
+            self.assertEqual(len(manifest["restart_files"]), len(expected_parts))
+            self.assertEqual(
+                {
+                    Path(relative_path).name.split("_")[0]
+                    for relative_path in manifest["restart_files"]
+                },
+                expected_parts,
+            )
+            for relative_path in manifest["restart_files"]:
+                self.assertTrue((manifest_path.parent / relative_path).is_file())
+        for obsolete_metric_file in (
+            "normalized_kinematic_energy.txt",
+            "stress_tensor_0.txt",
+            "stress_tensor_1.txt",
+            "stress_tensor_save.txt",
+            "target_stress.txt",
+        ):
+            self.assertFalse((case_dir / obsolete_metric_file).exists())
 
     def particle_count(self, case_dir):
         lines = (case_dir / "inletPGDEM_ini.mdpa").read_text(encoding="utf-8").splitlines()

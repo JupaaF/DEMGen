@@ -205,6 +205,22 @@ class CurveGenerationSettingsTests(unittest.TestCase):
             )
         )
 
+    def test_equal_endpoint_stress_sweep_produces_one_target(self):
+        settings = parse_curve_generation_settings(
+            input_parameters(
+                {
+                    "mode": STRESS_SWEEP,
+                    "initial_density": 0.5,
+                    "initial_stress": 1000.0,
+                    "final_stress": 1000.0,
+                    "number_of_steps": 1,
+                }
+            ),
+            1000.0,
+        )
+
+        self.assertEqual(settings.stress_targets, (1000.0,))
+
     def test_density_sweep_uses_logarithmic_preparation_ramp(self):
         settings = parse_curve_generation_settings(
             input_parameters(
